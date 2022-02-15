@@ -1,0 +1,23 @@
+[package]
+name = "dade"
+version = "0.1.0"
+edition = "2021"
+authors = ["odd <odd12258053@gmail.com>"]
+description = "dade is data definition for Rust structures."
+license-file = "LICENSE"
+readme = "README.md"
+repository = "https://github.com/odd12258053/dade"
+
+[dependencies]
+dade_derive = { path = "./dade_derive" }
+indexmap = "1.8.0"
+
+
+[workspace]
+members = [
+    "dade_derive",
+]
+
+[dev-dependencies]
+# For benchmark
+serde_json = "1.0.79"
