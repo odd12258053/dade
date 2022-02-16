@@ -29,10 +29,7 @@ pub trait Model {
 
 impl<T: ToJsonValue + FromJsonValue> Model for T {
     fn parse(json: &str) -> Result<Self> {
-        match json_load(json) {
-            Ok(val) => FromJsonValue::from_json_value(&val),
-            Err(err) => Err(err),
-        }
+        FromJsonValue::from_json_value(&json_load(json)?)
     }
     fn json(&self) -> String {
         ToJsonValue::to_json_value(self).to_string()

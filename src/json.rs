@@ -243,12 +243,9 @@ impl<T: FromJsonValue> FromJsonValue for Vec<T> {
     fn from_json_value(value: &JsonValue) -> Result<Self> {
         match value {
             JsonValue::Array(arr) => {
-                let mut buffer = Vec::new();
+                let mut buffer = Vec::with_capacity(arr.len());
                 for val in arr.iter() {
-                    match FromJsonValue::from_json_value(val) {
-                        Ok(v) => buffer.push(v),
-                        Err(err) => return Err(err),
-                    }
+                    buffer.push(FromJsonValue::from_json_value(val)?);
                 }
                 Ok(buffer)
             }
@@ -261,11 +258,14 @@ impl<T: FromJsonValue> FromJsonValue for Option<T> {
     fn from_json_value(value: &JsonValue) -> Result<Self> {
         match value {
             JsonValue::Null => Ok(None),
-            _ => match FromJsonValue::from_json_value(value) {
-                Ok(ret) => Ok(Some(ret)),
-                Err(err) => Err(err),
-            },
+            _ => Ok(Some(FromJsonValue::from_json_value(value)?)),
         }
+    }
+}
+
+impl<T: FromJsonValue> FromJsonValue for Box<T> {
+    fn from_json_value(value: &JsonValue) -> Result<Self> {
+        Ok(Box::new(FromJsonValue::from_json_value(value)?))
     }
 }
 
@@ -391,5 +391,11 @@ impl<T: ToJsonValue> ToJsonValue for Option<T> {
             None => JsonValue::Null,
             Some(val) => ToJsonValue::to_json_value(val),
         }
+    }
+}
+
+impl<T: ToJsonValue> ToJsonValue for Box<T> {
+    fn to_json_value(&self) -> JsonValue {
+        T::to_json_value(self)
     }
 }
