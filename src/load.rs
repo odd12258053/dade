@@ -6,6 +6,11 @@ use indexmap::IndexMap;
 use crate::error::{Error, Result};
 use crate::json::{JsonValue, Number};
 
+const BUFFER_SIZE_STRING: usize = 256;
+const BUFFER_SIZE_NUMBER: usize = 32;
+const BUFFER_SIZE_ARRAY: usize = 8;
+const BUFFER_SIZE_OBJECT: usize = 8;
+
 pub struct JsonLoader<'a> {
     chars: Peekable<Chars<'a>>,
 }
@@ -18,31 +23,23 @@ impl<'a> JsonLoader<'a> {
     }
 
     pub fn load(&mut self) -> Result<JsonValue> {
-        match self._load() {
-            Ok(v) => {
-                for c in self.chars.by_ref() {
-                    match c {
-                        ' ' | '\r' | '\t' | '\n' => continue,
-                        _ => return Err(Error::new("extra data")),
-                    }
-                }
-                Ok(v)
+        let val = self._load()?;
+        for c in self.chars.by_ref() {
+            match c {
+                ' ' | '\r' | '\t' | '\n' => continue,
+                _ => return Err(Error::new("extra data")),
             }
-            Err(err) => Err(err),
         }
+        Ok(val)
     }
 
     fn _load(&mut self) -> Result<JsonValue> {
-        while let Some(c) = self.chars.peek() {
+        while let Some(c) = self.chars.next() {
             match c {
-                ' ' | '\r' | '\t' | '\n' => {
-                    self.chars.next();
-                    continue;
-                }
+                ' ' | '\r' | '\t' | '\n' => continue,
                 // null
                 'n' => {
-                    if Some('n') == self.chars.next()
-                        && Some('u') == self.chars.next()
+                    if Some('u') == self.chars.next()
                         && Some('l') == self.chars.next()
                         && Some('l') == self.chars.next()
                     {
@@ -53,8 +50,7 @@ impl<'a> JsonLoader<'a> {
                 }
                 // true
                 't' => {
-                    if Some('t') == self.chars.next()
-                        && Some('r') == self.chars.next()
+                    if Some('r') == self.chars.next()
                         && Some('u') == self.chars.next()
                         && Some('e') == self.chars.next()
                     {
@@ -65,8 +61,7 @@ impl<'a> JsonLoader<'a> {
                 }
                 // false
                 'f' => {
-                    if Some('f') == self.chars.next()
-                        && Some('a') == self.chars.next()
+                    if Some('a') == self.chars.next()
                         && Some('l') == self.chars.next()
                         && Some('s') == self.chars.next()
                         && Some('e') == self.chars.next()
@@ -87,148 +82,194 @@ impl<'a> JsonLoader<'a> {
                 // plus = %x2B                ; +
                 // zero = %x30                ; 0
                 '-' | '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' => {
-                    let mut val = String::new();
+                    let mut val = String::with_capacity(BUFFER_SIZE_NUMBER);
                     // [ minus ]
-                    if c == &'-' {
-                        val.push(self.chars.next().unwrap());
-                    }
+                    let cc = if c == '-' {
+                        val.push(c);
+                        match self.chars.next() {
+                            Some(cc) => cc,
+                            None => return Err(Error::new("extra data")),
+                        }
+                    } else {
+                        c
+                    };
                     // int = zero / ( digit1-9 *DIGIT )
-                    match self.chars.peek() {
+                    match cc {
                         // zero
-                        Some('0') => {
-                            val.push(self.chars.next().unwrap());
+                        '0' => {
+                            val.push(cc);
                         }
                         // digit1-9
-                        Some('1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9') => {
-                            val.push(self.chars.next().unwrap());
+                        '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' => {
+                            val.push(cc);
                             // *DIGIT
                             while let Some(
-                                '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9',
+                                ccc @ ('0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9'),
                             ) = self.chars.peek()
                             {
-                                val.push(self.chars.next().unwrap())
+                                val.push(*ccc);
+                                self.chars.next();
                             }
                         }
                         _ => return Err(Error::new("extra data")),
                     }
                     // frac = decimal-point 1*DIGIT
                     // decimal-point
-                    if let Some('.') = self.chars.peek() {
-                        val.push(self.chars.next().unwrap());
+                    if let Some(cc @ '.') = self.chars.peek() {
+                        val.push(*cc);
+                        self.chars.next();
                         // *DIGIT
-                        while let Some('0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9') =
-                            self.chars.peek()
+                        while let Some(
+                            ccc @ ('0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9'),
+                        ) = self.chars.peek()
                         {
-                            val.push(self.chars.next().unwrap())
+                            val.push(*ccc);
+                            self.chars.next();
                         }
                     }
                     // exp = e [ minus / plus ] 1*DIGIT
-                    if let Some('e' | 'E') = self.chars.peek() {
-                        val.push(self.chars.next().unwrap());
+                    if let Some(cc @ ('e' | 'E')) = self.chars.peek() {
+                        val.push(*cc);
+                        self.chars.next();
                         // [ minus / plus ]
-                        if let Some('-' | '+') = self.chars.peek() {
-                            val.push(self.chars.next().unwrap());
+                        if let Some(ccc @ ('-' | '+')) = self.chars.peek() {
+                            val.push(*ccc);
+                            self.chars.next();
+                        }
+                        // 1 DIGIT
+                        match self.chars.next() {
+                            Some(
+                                ccc @ ('0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9'),
+                            ) => val.push(ccc),
+                            _ => return Err(Error::new("extra data")),
                         }
                         // *DIGIT
-                        while let Some('0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9') =
-                            self.chars.peek()
+                        while let Some(
+                            cc @ ('0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9'),
+                        ) = self.chars.peek()
                         {
-                            val.push(self.chars.next().unwrap())
+                            val.push(*cc);
+                            self.chars.next();
                         }
                     }
                     return Ok(JsonValue::Number(Number::new(val)));
                 }
                 // string
                 '"' => {
-                    self.chars.next();
-                    let mut val = String::new();
+                    let mut val = String::with_capacity(BUFFER_SIZE_STRING);
                     while let Some(cc) = self.chars.next() {
                         match cc {
                             '\\' => {
-                                if let Some('"') = self.chars.peek() {
-                                    val.push(cc);
-                                    val.push(self.chars.next().unwrap());
+                                match self.chars.next() {
+                                    Some('"') => val.push('"'),
+                                    Some('\\') => val.push('\\'),
+                                    Some('/') => val.push('/'),
+                                    Some('b') => val.push(char::from_u32(0x08).unwrap()),
+                                    Some('f') => val.push(char::from_u32(0x0C).unwrap()),
+                                    Some('n') => val.push('\n'),
+                                    Some('r') => val.push('\r'),
+                                    Some('t') => val.push('\t'),
+                                    // TODO; handle \u{XXXX}.
+                                    Some('u') => {
+                                        let mut codes = String::new();
+                                        for _ in 1..4 {
+                                            match self.chars.next() {
+                                                Some(
+                                                    ccc @ ('0' | '1' | '2' | '3' | '4' | '5' | '6'
+                                                    | '7' | '8' | '9' | 'a' | 'b' | 'c'
+                                                    | 'd' | 'e' | 'f' | 'A' | 'B' | 'C'
+                                                    | 'D' | 'E' | 'F'),
+                                                ) => {
+                                                    codes.push(ccc);
+                                                }
+                                                _ => return Err(Error::new("extra data")),
+                                            }
+                                        }
+                                        match u32::from_str_radix(codes.as_str(), 16) {
+                                            Ok(code) => match char::from_u32(code) {
+                                                Some(ccc) => val.push(ccc),
+                                                None => return Err(Error::new("extra data")),
+                                            },
+                                            Err(err) => {
+                                                return Err(Error::new(err.to_string().as_str()));
+                                            }
+                                        }
+                                    }
+                                    _ => return Err(Error::new("invalid control character")),
                                 }
                             }
-                            '"' => break,
+                            '"' => return Ok(JsonValue::String(val)),
                             '\r' | '\t' | '\n' => {
                                 return Err(Error::new("invalid control character"))
                             }
                             _ => val.push(cc),
                         }
                     }
-                    return Ok(JsonValue::String(val));
+                    return Err(Error::new("unterminated string"));
                 }
                 // array
                 '[' => {
-                    self.chars.next();
-                    let mut vec = Vec::new();
+                    let mut vec = Vec::with_capacity(BUFFER_SIZE_ARRAY);
                     loop {
-                        match self._load() {
-                            Ok(val) => {
-                                vec.push(val);
-                                for cc in self.chars.by_ref() {
-                                    match cc {
-                                        ' ' | '\r' | '\t' | '\n' => continue,
-                                        ',' => break,
-                                        ']' => return Ok(JsonValue::Array(vec)),
-                                        _ => return Err(Error::new("extra data")),
-                                    }
-                                }
+                        match self.chars.peek() {
+                            Some(' ' | '\r' | '\t' | '\n') => {
+                                self.chars.next();
                             }
-                            Err(err) => {
-                                if let Some(']') = self.chars.next() {
-                                    return if vec.is_empty() {
-                                        Ok(JsonValue::Array(vec))
-                                    } else {
-                                        Err(Error::new("expect ']'"))
-                                    };
-                                }
-                                return Err(err);
+                            Some(']') => {
+                                self.chars.next();
+                                return Ok(JsonValue::Array(vec));
+                            }
+                            _ => break,
+                        }
+                    }
+                    loop {
+                        vec.push(self._load()?);
+                        for cc in self.chars.by_ref() {
+                            match cc {
+                                ' ' | '\r' | '\t' | '\n' => continue,
+                                ',' => break,
+                                ']' => return Ok(JsonValue::Array(vec)),
+                                _ => return Err(Error::new("extra data")),
                             }
                         }
                     }
                 }
                 // object
                 '{' => {
-                    self.chars.next();
-                    let mut dict: IndexMap<String, JsonValue> = IndexMap::new();
+                    let mut dict: IndexMap<String, JsonValue> =
+                        IndexMap::with_capacity(BUFFER_SIZE_OBJECT);
                     loop {
-                        match self._load() {
-                            Ok(key_val) => {
-                                let key = match key_val {
-                                    JsonValue::String(key) => key,
-                                    _ => return Err(Error::new("expect string")),
-                                };
-                                for cc in self.chars.by_ref() {
-                                    match cc {
-                                        ' ' | '\r' | '\t' | '\n' => continue,
-                                        ':' => break,
-                                        _ => return Err(Error::new("extra data")),
-                                    }
-                                }
-                                match self._load() {
-                                    Ok(val) => dict.insert(key, val),
-                                    Err(err) => return Err(err),
-                                };
-                                for cc in self.chars.by_ref() {
-                                    match cc {
-                                        ' ' | '\r' | '\t' | '\n' => continue,
-                                        ',' => break,
-                                        '}' => return Ok(JsonValue::Object(dict)),
-                                        _ => return Err(Error::new("extra data")),
-                                    }
-                                }
+                        match self.chars.peek() {
+                            Some(' ' | '\r' | '\t' | '\n') => {
+                                self.chars.next();
                             }
-                            Err(err) => {
-                                if let Some('}') = self.chars.next() {
-                                    return if dict.is_empty() {
-                                        Ok(JsonValue::Object(dict))
-                                    } else {
-                                        Err(Error::new("expect '}'"))
-                                    };
-                                }
-                                return Err(err);
+                            Some('}') => {
+                                self.chars.next();
+                                return Ok(JsonValue::Object(dict));
+                            }
+                            _ => break,
+                        }
+                    }
+
+                    loop {
+                        let key = match self._load()? {
+                            JsonValue::String(key) => key,
+                            _ => return Err(Error::new("expect string")),
+                        };
+                        for cc in self.chars.by_ref() {
+                            match cc {
+                                ' ' | '\r' | '\t' | '\n' => continue,
+                                ':' => break,
+                                _ => return Err(Error::new("extra data")),
+                            }
+                        }
+                        dict.insert(key, self._load()?);
+                        for cc in self.chars.by_ref() {
+                            match cc {
+                                ' ' | '\r' | '\t' | '\n' => continue,
+                                ',' => break,
+                                '}' => return Ok(JsonValue::Object(dict)),
+                                _ => return Err(Error::new("extra data")),
                             }
                         }
                     }

@@ -3,6 +3,7 @@ use crate::json::JsonValue;
 pub struct JsonDumper {}
 
 impl JsonDumper {
+    // TODO: Add pattern;
     pub fn escape(val: &str) -> String {
         let mut duffer = String::from('"');
         for c in val.chars() {
@@ -14,6 +15,7 @@ impl JsonDumper {
         duffer.push('"');
         duffer
     }
+    // TODO: Handle \u{XXXX};
     pub fn dump(value: &JsonValue) -> String {
         match value {
             JsonValue::Null => "null".to_string(),
