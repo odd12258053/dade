@@ -1,6 +1,6 @@
+use dade::{json_dump, json_load};
 use std::fs::File;
 use std::io::{BufReader, Read};
-use dade::{json_dump, json_load};
 
 #[test]
 fn unicode() {

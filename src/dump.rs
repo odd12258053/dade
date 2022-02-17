@@ -15,7 +15,7 @@ impl JsonDumper {
                 '"' => duffer.push('\"'),
                 _ if c.is_control() => {
                     duffer.push_str(c.escape_default().to_string().as_str());
-                },
+                }
                 _ if c.is_ascii() => {
                     duffer.push(c);
                 }
@@ -24,7 +24,7 @@ impl JsonDumper {
                     s.retain(|c| c != '{');
                     s.retain(|c| c != '}');
                     duffer.push_str(s.as_str());
-                },
+                }
                 _ => {
                     duffer.push(c);
                 }

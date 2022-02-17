@@ -85,7 +85,6 @@ fn test_nested_model() {
     );
 }
 
-
 #[model]
 struct Simple {
     id: u32,

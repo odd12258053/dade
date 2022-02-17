@@ -159,48 +159,47 @@ impl<'a> JsonLoader<'a> {
                     let mut val = String::with_capacity(BUFFER_SIZE_STRING);
                     while let Some(cc) = self.chars.next() {
                         match cc {
-                            '\\' => {
-                                match self.chars.next() {
-                                    Some('"') => val.push('"'),
-                                    Some('\\') => val.push('\\'),
-                                    Some('/') => val.push('/'),
-                                    Some('b') => val.push(char::from_u32(0x08).unwrap()),
-                                    Some('f') => val.push(char::from_u32(0x0C).unwrap()),
-                                    Some('n') => val.push('\n'),
-                                    Some('r') => val.push('\r'),
-                                    Some('t') => val.push('\t'),
-                                    // TODO; handle \u{XXXX}.
-                                    Some('u') => {
-                                        let mut codes: [u32; 4] = [0; 4];
-                                        for i in 0..4 {
+                            '\\' => match self.chars.next() {
+                                Some('"') => val.push('"'),
+                                Some('\\') => val.push('\\'),
+                                Some('/') => val.push('/'),
+                                Some('b') => val.push(char::from_u32(0x08).unwrap()),
+                                Some('f') => val.push(char::from_u32(0x0C).unwrap()),
+                                Some('n') => val.push('\n'),
+                                Some('r') => val.push('\r'),
+                                Some('t') => val.push('\t'),
+                                Some('u') => {
+                                    match char::from_u32({
+                                        let mut code = 0;
+                                        for i in [4096, 256, 16, 1] {
                                             match self.chars.next() {
                                                 Some('0') => continue,
-                                                Some('1') => codes[i] = 1,
-                                                Some('2') => codes[i] = 2,
-                                                Some('3') => codes[i] = 3,
-                                                Some('4') => codes[i] = 4,
-                                                Some('5') => codes[i] = 5,
-                                                Some('6') => codes[i] = 6,
-                                                Some('7') => codes[i] = 7,
-                                                Some('8') => codes[i] = 8,
-                                                Some('9') => codes[i] = 9,
-                                                Some('a' | 'A') => codes[i] = 10,
-                                                Some('b' | 'B') => codes[i] = 11,
-                                                Some('c' | 'C') => codes[i] = 12,
-                                                Some('d' | 'D') => codes[i] = 13,
-                                                Some('e' | 'E') => codes[i] = 14,
-                                                Some('f' | 'F') => codes[i] = 15,
+                                                Some('1') => code += i,
+                                                Some('2') => code += i * 2,
+                                                Some('3') => code += i * 3,
+                                                Some('4') => code += i * 4,
+                                                Some('5') => code += i * 5,
+                                                Some('6') => code += i * 6,
+                                                Some('7') => code += i * 7,
+                                                Some('8') => code += i * 8,
+                                                Some('9') => code += i * 9,
+                                                Some('a' | 'A') => code += i * 10,
+                                                Some('b' | 'B') => code += i * 11,
+                                                Some('c' | 'C') => code += i * 12,
+                                                Some('d' | 'D') => code += i * 13,
+                                                Some('e' | 'E') => code += i * 14,
+                                                Some('f' | 'F') => code += i * 15,
                                                 _ => return Err(Error::new("extra data")),
                                             }
                                         }
-                                        match char::from_u32(4096 * codes[0] + 256 * codes[1] + 16 * codes[2] + 1 * codes[3]) {
-                                            Some(ccc) => val.push(ccc),
-                                            None => return Err(Error::new("extra data")),
-                                        }
+                                        code
+                                    }) {
+                                        Some(ccc) => val.push(ccc),
+                                        None => return Err(Error::new("extra data")),
                                     }
-                                    _ => return Err(Error::new("invalid control character")),
                                 }
-                            }
+                                _ => return Err(Error::new("invalid control character")),
+                            },
                             '"' => return Ok(JsonValue::String(val)),
                             '\r' | '\t' | '\n' => {
                                 return Err(Error::new("invalid control character"))

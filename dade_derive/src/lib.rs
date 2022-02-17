@@ -166,18 +166,17 @@ enum ModelType {
     Object,
 }
 
+const NUMBER_TYPES: [&str; 14] = [
+    "i8", "i16", "i32", "i64", "i128", "isize", "u8", "u16", "u32", "u64", "u128", "usize", "f32",
+    "f64",
+];
+
 impl ModelType {
     fn new(ty: &Type) -> Self {
         match ty {
             Type::Path(type_path) => {
                 let type_token = type_path.to_token_stream().to_string();
-                if [
-                    "i8", "i16", "i32", "i64", "i128", "isize", "u8", "u16", "u32", "u64", "u128",
-                    "usize", "f32", "f64",
-                ]
-                .iter()
-                .any(|&s| s == type_token)
-                {
+                if NUMBER_TYPES.iter().any(|&s| s == type_token) {
                     ModelType::Number
                 } else if type_token == "String" {
                     ModelType::String
