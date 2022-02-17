@@ -21,7 +21,6 @@ struct User {
   name: String,
   #[field(default = "en")]
   lang: String,
-  #[field]
   url: Option<String>,
   #[field(default = false)]
   verified: bool

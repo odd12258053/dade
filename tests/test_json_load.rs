@@ -187,7 +187,7 @@ fn object() {
 // #[test]
 // fn fail01()
 // {
-//     let file = File::open("./tests/data/fail01.json").unwrap();
+//     let file = File::open("./tests/data/jsonchecker/fail01.json").unwrap();
 //     let mut buf_reader = BufReader::new(file);
 //     let mut contents = String::new();
 //     buf_reader.read_to_string(&mut contents).unwrap();
@@ -197,7 +197,7 @@ fn object() {
 
 #[test]
 fn fail02() {
-    let file = File::open("./tests/data/fail02.json").unwrap();
+    let file = File::open("./tests/data/jsonchecker/fail02.json").unwrap();
     let mut buf_reader = BufReader::new(file);
     let mut contents = String::new();
     buf_reader.read_to_string(&mut contents).unwrap();
@@ -207,7 +207,7 @@ fn fail02() {
 
 #[test]
 fn fail03() {
-    let file = File::open("./tests/data/fail03.json").unwrap();
+    let file = File::open("./tests/data/jsonchecker/fail03.json").unwrap();
     let mut buf_reader = BufReader::new(file);
     let mut contents = String::new();
     buf_reader.read_to_string(&mut contents).unwrap();
@@ -217,7 +217,7 @@ fn fail03() {
 
 #[test]
 fn fail04() {
-    let file = File::open("./tests/data/fail04.json").unwrap();
+    let file = File::open("./tests/data/jsonchecker/fail04.json").unwrap();
     let mut buf_reader = BufReader::new(file);
     let mut contents = String::new();
     buf_reader.read_to_string(&mut contents).unwrap();
@@ -227,7 +227,7 @@ fn fail04() {
 
 #[test]
 fn fail05() {
-    let file = File::open("./tests/data/fail05.json").unwrap();
+    let file = File::open("./tests/data/jsonchecker/fail05.json").unwrap();
     let mut buf_reader = BufReader::new(file);
     let mut contents = String::new();
     buf_reader.read_to_string(&mut contents).unwrap();
@@ -237,7 +237,7 @@ fn fail05() {
 
 #[test]
 fn fail06() {
-    let file = File::open("./tests/data/fail06.json").unwrap();
+    let file = File::open("./tests/data/jsonchecker/fail06.json").unwrap();
     let mut buf_reader = BufReader::new(file);
     let mut contents = String::new();
     buf_reader.read_to_string(&mut contents).unwrap();
@@ -247,7 +247,7 @@ fn fail06() {
 
 #[test]
 fn fail07() {
-    let file = File::open("./tests/data/fail07.json").unwrap();
+    let file = File::open("./tests/data/jsonchecker/fail07.json").unwrap();
     let mut buf_reader = BufReader::new(file);
     let mut contents = String::new();
     buf_reader.read_to_string(&mut contents).unwrap();
@@ -257,7 +257,7 @@ fn fail07() {
 
 #[test]
 fn fail08() {
-    let file = File::open("./tests/data/fail08.json").unwrap();
+    let file = File::open("./tests/data/jsonchecker/fail08.json").unwrap();
     let mut buf_reader = BufReader::new(file);
     let mut contents = String::new();
     buf_reader.read_to_string(&mut contents).unwrap();
@@ -267,7 +267,7 @@ fn fail08() {
 
 #[test]
 fn fail09() {
-    let file = File::open("./tests/data/fail09.json").unwrap();
+    let file = File::open("./tests/data/jsonchecker/fail09.json").unwrap();
     let mut buf_reader = BufReader::new(file);
     let mut contents = String::new();
     buf_reader.read_to_string(&mut contents).unwrap();
@@ -277,7 +277,7 @@ fn fail09() {
 
 #[test]
 fn fail10() {
-    let file = File::open("./tests/data/fail10.json").unwrap();
+    let file = File::open("./tests/data/jsonchecker/fail10.json").unwrap();
     let mut buf_reader = BufReader::new(file);
     let mut contents = String::new();
     buf_reader.read_to_string(&mut contents).unwrap();
@@ -287,7 +287,7 @@ fn fail10() {
 
 #[test]
 fn fail11() {
-    let file = File::open("./tests/data/fail11.json").unwrap();
+    let file = File::open("./tests/data/jsonchecker/fail11.json").unwrap();
     let mut buf_reader = BufReader::new(file);
     let mut contents = String::new();
     buf_reader.read_to_string(&mut contents).unwrap();
@@ -297,7 +297,7 @@ fn fail11() {
 
 #[test]
 fn fail12() {
-    let file = File::open("./tests/data/fail12.json").unwrap();
+    let file = File::open("./tests/data/jsonchecker/fail12.json").unwrap();
     let mut buf_reader = BufReader::new(file);
     let mut contents = String::new();
     buf_reader.read_to_string(&mut contents).unwrap();
@@ -307,7 +307,7 @@ fn fail12() {
 
 #[test]
 fn fail13() {
-    let file = File::open("./tests/data/fail13.json").unwrap();
+    let file = File::open("./tests/data/jsonchecker/fail13.json").unwrap();
     let mut buf_reader = BufReader::new(file);
     let mut contents = String::new();
     buf_reader.read_to_string(&mut contents).unwrap();
@@ -317,7 +317,7 @@ fn fail13() {
 
 #[test]
 fn fail14() {
-    let file = File::open("./tests/data/fail14.json").unwrap();
+    let file = File::open("./tests/data/jsonchecker/fail14.json").unwrap();
     let mut buf_reader = BufReader::new(file);
     let mut contents = String::new();
     buf_reader.read_to_string(&mut contents).unwrap();
@@ -327,7 +327,7 @@ fn fail14() {
 
 #[test]
 fn fail15() {
-    let file = File::open("./tests/data/fail15.json").unwrap();
+    let file = File::open("./tests/data/jsonchecker/fail15.json").unwrap();
     let mut buf_reader = BufReader::new(file);
     let mut contents = String::new();
     buf_reader.read_to_string(&mut contents).unwrap();
@@ -337,7 +337,7 @@ fn fail15() {
 
 #[test]
 fn fail16() {
-    let file = File::open("./tests/data/fail16.json").unwrap();
+    let file = File::open("./tests/data/jsonchecker/fail16.json").unwrap();
     let mut buf_reader = BufReader::new(file);
     let mut contents = String::new();
     buf_reader.read_to_string(&mut contents).unwrap();
@@ -347,7 +347,7 @@ fn fail16() {
 
 #[test]
 fn fail17() {
-    let file = File::open("./tests/data/fail17.json").unwrap();
+    let file = File::open("./tests/data/jsonchecker/fail17.json").unwrap();
     let mut buf_reader = BufReader::new(file);
     let mut contents = String::new();
     buf_reader.read_to_string(&mut contents).unwrap();
@@ -358,7 +358,7 @@ fn fail17() {
 // #[test]
 // fn fail18()
 // {
-//     let file = File::open("./tests/data/fail18.json").unwrap();
+//     let file = File::open("./tests/data/jsonchecker/fail18.json").unwrap();
 //     let mut buf_reader = BufReader::new(file);
 //     let mut contents = String::new();
 //     buf_reader.read_to_string(&mut contents).unwrap();
@@ -368,7 +368,7 @@ fn fail17() {
 
 #[test]
 fn fail19() {
-    let file = File::open("./tests/data/fail19.json").unwrap();
+    let file = File::open("./tests/data/jsonchecker/fail19.json").unwrap();
     let mut buf_reader = BufReader::new(file);
     let mut contents = String::new();
     buf_reader.read_to_string(&mut contents).unwrap();
@@ -378,7 +378,7 @@ fn fail19() {
 
 #[test]
 fn fail20() {
-    let file = File::open("./tests/data/fail20.json").unwrap();
+    let file = File::open("./tests/data/jsonchecker/fail20.json").unwrap();
     let mut buf_reader = BufReader::new(file);
     let mut contents = String::new();
     buf_reader.read_to_string(&mut contents).unwrap();
@@ -388,7 +388,7 @@ fn fail20() {
 
 #[test]
 fn fail21() {
-    let file = File::open("./tests/data/fail21.json").unwrap();
+    let file = File::open("./tests/data/jsonchecker/fail21.json").unwrap();
     let mut buf_reader = BufReader::new(file);
     let mut contents = String::new();
     buf_reader.read_to_string(&mut contents).unwrap();
@@ -398,7 +398,7 @@ fn fail21() {
 
 #[test]
 fn fail22() {
-    let file = File::open("./tests/data/fail22.json").unwrap();
+    let file = File::open("./tests/data/jsonchecker/fail22.json").unwrap();
     let mut buf_reader = BufReader::new(file);
     let mut contents = String::new();
     buf_reader.read_to_string(&mut contents).unwrap();
@@ -408,7 +408,7 @@ fn fail22() {
 
 #[test]
 fn fail23() {
-    let file = File::open("./tests/data/fail23.json").unwrap();
+    let file = File::open("./tests/data/jsonchecker/fail23.json").unwrap();
     let mut buf_reader = BufReader::new(file);
     let mut contents = String::new();
     buf_reader.read_to_string(&mut contents).unwrap();
@@ -418,7 +418,7 @@ fn fail23() {
 
 #[test]
 fn fail24() {
-    let file = File::open("./tests/data/fail24.json").unwrap();
+    let file = File::open("./tests/data/jsonchecker/fail24.json").unwrap();
     let mut buf_reader = BufReader::new(file);
     let mut contents = String::new();
     buf_reader.read_to_string(&mut contents).unwrap();
@@ -428,7 +428,7 @@ fn fail24() {
 
 #[test]
 fn fail25() {
-    let file = File::open("./tests/data/fail25.json").unwrap();
+    let file = File::open("./tests/data/jsonchecker/fail25.json").unwrap();
     let mut buf_reader = BufReader::new(file);
     let mut contents = String::new();
     buf_reader.read_to_string(&mut contents).unwrap();
@@ -438,7 +438,7 @@ fn fail25() {
 
 #[test]
 fn fail26() {
-    let file = File::open("./tests/data/fail26.json").unwrap();
+    let file = File::open("./tests/data/jsonchecker/fail26.json").unwrap();
     let mut buf_reader = BufReader::new(file);
     let mut contents = String::new();
     buf_reader.read_to_string(&mut contents).unwrap();
@@ -448,7 +448,7 @@ fn fail26() {
 
 #[test]
 fn fail27() {
-    let file = File::open("./tests/data/fail27.json").unwrap();
+    let file = File::open("./tests/data/jsonchecker/fail27.json").unwrap();
     let mut buf_reader = BufReader::new(file);
     let mut contents = String::new();
     buf_reader.read_to_string(&mut contents).unwrap();
@@ -458,7 +458,7 @@ fn fail27() {
 
 #[test]
 fn fail28() {
-    let file = File::open("./tests/data/fail28.json").unwrap();
+    let file = File::open("./tests/data/jsonchecker/fail28.json").unwrap();
     let mut buf_reader = BufReader::new(file);
     let mut contents = String::new();
     buf_reader.read_to_string(&mut contents).unwrap();
@@ -468,7 +468,7 @@ fn fail28() {
 
 #[test]
 fn fail29() {
-    let file = File::open("./tests/data/fail29.json").unwrap();
+    let file = File::open("./tests/data/jsonchecker/fail29.json").unwrap();
     let mut buf_reader = BufReader::new(file);
     let mut contents = String::new();
     buf_reader.read_to_string(&mut contents).unwrap();
@@ -478,7 +478,7 @@ fn fail29() {
 
 #[test]
 fn fail30() {
-    let file = File::open("./tests/data/fail30.json").unwrap();
+    let file = File::open("./tests/data/jsonchecker/fail30.json").unwrap();
     let mut buf_reader = BufReader::new(file);
     let mut contents = String::new();
     buf_reader.read_to_string(&mut contents).unwrap();
@@ -488,7 +488,7 @@ fn fail30() {
 
 #[test]
 fn fail31() {
-    let file = File::open("./tests/data/fail31.json").unwrap();
+    let file = File::open("./tests/data/jsonchecker/fail31.json").unwrap();
     let mut buf_reader = BufReader::new(file);
     let mut contents = String::new();
     buf_reader.read_to_string(&mut contents).unwrap();
@@ -498,7 +498,7 @@ fn fail31() {
 
 #[test]
 fn fail32() {
-    let file = File::open("./tests/data/fail32.json").unwrap();
+    let file = File::open("./tests/data/jsonchecker/fail32.json").unwrap();
     let mut buf_reader = BufReader::new(file);
     let mut contents = String::new();
     buf_reader.read_to_string(&mut contents).unwrap();
@@ -508,7 +508,7 @@ fn fail32() {
 
 #[test]
 fn fail33() {
-    let file = File::open("./tests/data/fail33.json").unwrap();
+    let file = File::open("./tests/data/jsonchecker/fail33.json").unwrap();
     let mut buf_reader = BufReader::new(file);
     let mut contents = String::new();
     buf_reader.read_to_string(&mut contents).unwrap();
@@ -518,7 +518,7 @@ fn fail33() {
 
 #[test]
 fn pass01() {
-    let file = File::open("./tests/data/pass01.json").unwrap();
+    let file = File::open("./tests/data/jsonchecker/pass01.json").unwrap();
     let mut buf_reader = BufReader::new(file);
     let mut contents = String::new();
     buf_reader.read_to_string(&mut contents).unwrap();
@@ -528,7 +528,7 @@ fn pass01() {
 
 #[test]
 fn pass02() {
-    let file = File::open("./tests/data/pass02.json").unwrap();
+    let file = File::open("./tests/data/jsonchecker/pass02.json").unwrap();
     let mut buf_reader = BufReader::new(file);
     let mut contents = String::new();
     buf_reader.read_to_string(&mut contents).unwrap();
@@ -538,7 +538,7 @@ fn pass02() {
 
 #[test]
 fn pass03() {
-    let file = File::open("./tests/data/pass03.json").unwrap();
+    let file = File::open("./tests/data/jsonchecker/pass03.json").unwrap();
     let mut buf_reader = BufReader::new(file);
     let mut contents = String::new();
     buf_reader.read_to_string(&mut contents).unwrap();

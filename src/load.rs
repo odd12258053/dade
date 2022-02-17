@@ -171,28 +171,31 @@ impl<'a> JsonLoader<'a> {
                                     Some('t') => val.push('\t'),
                                     // TODO; handle \u{XXXX}.
                                     Some('u') => {
-                                        let mut codes = String::new();
-                                        for _ in 1..4 {
+                                        let mut codes: [u32; 4] = [0; 4];
+                                        for i in 0..4 {
                                             match self.chars.next() {
-                                                Some(
-                                                    ccc @ ('0' | '1' | '2' | '3' | '4' | '5' | '6'
-                                                    | '7' | '8' | '9' | 'a' | 'b' | 'c'
-                                                    | 'd' | 'e' | 'f' | 'A' | 'B' | 'C'
-                                                    | 'D' | 'E' | 'F'),
-                                                ) => {
-                                                    codes.push(ccc);
-                                                }
+                                                Some('0') => continue,
+                                                Some('1') => codes[i] = 1,
+                                                Some('2') => codes[i] = 2,
+                                                Some('3') => codes[i] = 3,
+                                                Some('4') => codes[i] = 4,
+                                                Some('5') => codes[i] = 5,
+                                                Some('6') => codes[i] = 6,
+                                                Some('7') => codes[i] = 7,
+                                                Some('8') => codes[i] = 8,
+                                                Some('9') => codes[i] = 9,
+                                                Some('a' | 'A') => codes[i] = 10,
+                                                Some('b' | 'B') => codes[i] = 11,
+                                                Some('c' | 'C') => codes[i] = 12,
+                                                Some('d' | 'D') => codes[i] = 13,
+                                                Some('e' | 'E') => codes[i] = 14,
+                                                Some('f' | 'F') => codes[i] = 15,
                                                 _ => return Err(Error::new("extra data")),
                                             }
                                         }
-                                        match u32::from_str_radix(codes.as_str(), 16) {
-                                            Ok(code) => match char::from_u32(code) {
-                                                Some(ccc) => val.push(ccc),
-                                                None => return Err(Error::new("extra data")),
-                                            },
-                                            Err(err) => {
-                                                return Err(Error::new(err.to_string().as_str()));
-                                            }
+                                        match char::from_u32(4096 * codes[0] + 256 * codes[1] + 16 * codes[2] + 1 * codes[3]) {
+                                            Some(ccc) => val.push(ccc),
+                                            None => return Err(Error::new("extra data")),
                                         }
                                     }
                                     _ => return Err(Error::new("invalid control character")),

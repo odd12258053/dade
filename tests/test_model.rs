@@ -43,7 +43,7 @@ fn test_model() {
     assert_eq!(foo.v5.w1, 10);
     assert_eq!(foo.v6, ());
     assert_eq!(
-        foo.json(),
+        foo.json(false),
         "{\"v1\":2.2,\"v2\":10,\"v3\":\"abc\",\"v4\":true,\"bar\":{\"w1\":10},\"v6\":null}"
     );
 }
@@ -61,18 +61,18 @@ fn test_nested_model() {
     let json = "{\"id\": 1}";
     let ret = Nested::parse(json);
     assert!(ret.is_ok(), "{}", ret.err().unwrap().to_string());
-    assert_eq!(ret.unwrap().json(), "{\"id\":1,\"child\":null}");
+    assert_eq!(ret.unwrap().json(false), "{\"id\":1,\"child\":null}");
 
     let json = "{\"id\": 1, \"child\": null}";
     let ret = Nested::parse(json);
     assert!(ret.is_ok(), "{}", ret.err().unwrap().to_string());
-    assert_eq!(ret.unwrap().json(), "{\"id\":1,\"child\":null}");
+    assert_eq!(ret.unwrap().json(false), "{\"id\":1,\"child\":null}");
 
     let json = "{\"id\": 1, \"child\": {\"id\": 2}}";
     let ret = Nested::parse(json);
     assert!(ret.is_ok(), "{}", ret.err().unwrap().to_string());
     assert_eq!(
-        ret.unwrap().json(),
+        ret.unwrap().json(false),
         "{\"id\":1,\"child\":{\"id\":2,\"child\":null}}"
     );
 
@@ -80,7 +80,22 @@ fn test_nested_model() {
     let ret = Nested::parse(json);
     assert!(ret.is_ok(), "{}", ret.err().unwrap().to_string());
     assert_eq!(
-        ret.unwrap().json(),
+        ret.unwrap().json(false),
         "{\"id\":1,\"child\":{\"id\":2,\"child\":{\"id\":3,\"child\":null}}}"
     );
+}
+
+
+#[model]
+struct Simple {
+    id: u32,
+    key: String,
+}
+
+#[test]
+fn test_simple_model() {
+    let json = "{\"id\": 1,\"key\": \"value\"}";
+    let ret = Simple::parse(json);
+    assert!(ret.is_ok(), "{}", ret.err().unwrap().to_string());
+    assert_eq!(ret.unwrap().json(false), "{\"id\":1,\"key\":\"value\"}");
 }

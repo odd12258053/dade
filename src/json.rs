@@ -36,7 +36,7 @@ pub enum JsonValue {
 
 impl ToString for JsonValue {
     fn to_string(&self) -> String {
-        JsonDumper::dump(self)
+        JsonDumper::new(false).dump(self)
     }
 }
 
