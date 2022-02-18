@@ -101,7 +101,7 @@ The schema is
 * If you want to bind other name
 ```rust
 #[model]
-struct User {James
+struct User {
     id: u64,
     #[field(alias = "FirstName")]
     first_name: String,
@@ -119,6 +119,7 @@ struct Name {
     last_name: String,
 }
 
+#[model]
 struct User {
     id: u64,
     name: Name,
