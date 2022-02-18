@@ -17,6 +17,11 @@ impl Number {
     pub fn parse<F: FromStr>(&self) -> std::result::Result<F, F::Err> {
         self.value.parse()
     }
+    pub fn from<T: std::string::ToString>(val: T) -> Self {
+        Self {
+            value: val.to_string(),
+        }
+    }
 }
 
 impl ToString for Number {
@@ -53,173 +58,45 @@ impl FromJsonValue for () {
     }
 }
 
-impl FromJsonValue for u8 {
-    fn from_json_value(value: &JsonValue) -> Result<Self> {
-        match value {
-            JsonValue::Number(num) => num
-                .value
-                .parse()
-                .map_err(|err: ParseIntError| Error::new(err.to_string().as_str())),
-            _ => Err(Error::new("expect `JsonValue::Number`")),
-        }
-    }
+macro_rules! from_json_value_for_int {
+    ( $( $i:ident ),* ) => {
+        $(
+            impl FromJsonValue for $i {
+                fn from_json_value(value: &JsonValue) -> Result<Self> {
+                    match value {
+                        JsonValue::Number(num) => num
+                            .value
+                            .parse()
+                            .map_err(|err: ParseIntError| Error::new(err.to_string().as_str())),
+                        _ => Err(Error::new("expect `JsonValue::Number`")),
+                    }
+                }
+            }
+        )*
+    };
 }
 
-impl FromJsonValue for u16 {
-    fn from_json_value(value: &JsonValue) -> Result<Self> {
-        match value {
-            JsonValue::Number(num) => num
-                .value
-                .parse()
-                .map_err(|err: ParseIntError| Error::new(err.to_string().as_str())),
-            _ => Err(Error::new("expect `JsonValue::Number`")),
-        }
-    }
+from_json_value_for_int!(u8, u16, u32, u64, u128, usize, i8, i16, i32, i64, i128, isize);
+
+macro_rules! from_json_value_for_float {
+    ( $( $i:ident ),* ) => {
+        $(
+            impl FromJsonValue for $i {
+                fn from_json_value(value: &JsonValue) -> Result<Self> {
+                    match value {
+                        JsonValue::Number(num) => num
+                            .value
+                            .parse()
+                            .map_err(|err: ParseFloatError| Error::new(err.to_string().as_str())),
+                        _ => Err(Error::new("expect `JsonValue::Number`")),
+                    }
+                }
+            }
+        )*
+    };
 }
 
-impl FromJsonValue for u32 {
-    fn from_json_value(value: &JsonValue) -> Result<Self> {
-        match value {
-            JsonValue::Number(num) => num
-                .value
-                .parse()
-                .map_err(|err: ParseIntError| Error::new(err.to_string().as_str())),
-            _ => Err(Error::new("expect `JsonValue::Number`")),
-        }
-    }
-}
-
-impl FromJsonValue for u64 {
-    fn from_json_value(value: &JsonValue) -> Result<Self> {
-        match value {
-            JsonValue::Number(num) => num
-                .value
-                .parse()
-                .map_err(|err: ParseIntError| Error::new(err.to_string().as_str())),
-            _ => Err(Error::new("expect `JsonValue::Number`")),
-        }
-    }
-}
-
-impl FromJsonValue for u128 {
-    fn from_json_value(value: &JsonValue) -> Result<Self> {
-        match value {
-            JsonValue::Number(num) => num
-                .value
-                .parse()
-                .map_err(|err: ParseIntError| Error::new(err.to_string().as_str())),
-            _ => Err(Error::new("expect `JsonValue::Number`")),
-        }
-    }
-}
-
-impl FromJsonValue for usize {
-    fn from_json_value(value: &JsonValue) -> Result<Self> {
-        match value {
-            JsonValue::Number(num) => num
-                .value
-                .parse()
-                .map_err(|err: ParseIntError| Error::new(err.to_string().as_str())),
-            _ => Err(Error::new("expect `JsonValue::Number`")),
-        }
-    }
-}
-
-impl FromJsonValue for i8 {
-    fn from_json_value(value: &JsonValue) -> Result<Self> {
-        match value {
-            JsonValue::Number(num) => num
-                .value
-                .parse()
-                .map_err(|err: ParseIntError| Error::new(err.to_string().as_str())),
-            _ => Err(Error::new("expect `JsonValue::Number`")),
-        }
-    }
-}
-
-impl FromJsonValue for i16 {
-    fn from_json_value(value: &JsonValue) -> Result<Self> {
-        match value {
-            JsonValue::Number(num) => num
-                .value
-                .parse()
-                .map_err(|err: ParseIntError| Error::new(err.to_string().as_str())),
-            _ => Err(Error::new("expect `JsonValue::Number`")),
-        }
-    }
-}
-
-impl FromJsonValue for i32 {
-    fn from_json_value(value: &JsonValue) -> Result<Self> {
-        match value {
-            JsonValue::Number(num) => num
-                .value
-                .parse()
-                .map_err(|err: ParseIntError| Error::new(err.to_string().as_str())),
-            _ => Err(Error::new("expect `JsonValue::Number`")),
-        }
-    }
-}
-
-impl FromJsonValue for i64 {
-    fn from_json_value(value: &JsonValue) -> Result<Self> {
-        match value {
-            JsonValue::Number(num) => num
-                .value
-                .parse()
-                .map_err(|err: ParseIntError| Error::new(err.to_string().as_str())),
-            _ => Err(Error::new("expect `JsonValue::Number`")),
-        }
-    }
-}
-
-impl FromJsonValue for i128 {
-    fn from_json_value(value: &JsonValue) -> Result<Self> {
-        match value {
-            JsonValue::Number(num) => num
-                .value
-                .parse()
-                .map_err(|err: ParseIntError| Error::new(err.to_string().as_str())),
-            _ => Err(Error::new("expect `JsonValue::Number`")),
-        }
-    }
-}
-
-impl FromJsonValue for isize {
-    fn from_json_value(value: &JsonValue) -> Result<Self> {
-        match value {
-            JsonValue::Number(num) => num
-                .value
-                .parse()
-                .map_err(|err: ParseIntError| Error::new(err.to_string().as_str())),
-            _ => Err(Error::new("expect `JsonValue::Number`")),
-        }
-    }
-}
-
-impl FromJsonValue for f32 {
-    fn from_json_value(value: &JsonValue) -> Result<Self> {
-        match value {
-            JsonValue::Number(num) => num
-                .value
-                .parse()
-                .map_err(|err: ParseFloatError| Error::new(err.to_string().as_str())),
-            _ => Err(Error::new("expect `JsonValue::Number`")),
-        }
-    }
-}
-
-impl FromJsonValue for f64 {
-    fn from_json_value(value: &JsonValue) -> Result<Self> {
-        match value {
-            JsonValue::Number(num) => num
-                .value
-                .parse()
-                .map_err(|err: ParseFloatError| Error::new(err.to_string().as_str())),
-            _ => Err(Error::new("expect `JsonValue::Number`")),
-        }
-    }
-}
+from_json_value_for_float!(f32, f64);
 
 impl FromJsonValue for String {
     fn from_json_value(value: &JsonValue) -> Result<Self> {
@@ -279,89 +156,19 @@ impl ToJsonValue for () {
     }
 }
 
-impl ToJsonValue for u8 {
-    fn to_json_value(&self) -> JsonValue {
-        JsonValue::Number(Number::new(self.to_string()))
-    }
+macro_rules! to_json_value_for_num {
+    ( $( $i:ident ),* ) => {
+        $(
+            impl ToJsonValue for $i {
+                fn to_json_value(&self) -> JsonValue {
+                    JsonValue::Number(Number::new(self.to_string()))
+                }
+            }
+        )*
+    };
 }
 
-impl ToJsonValue for u16 {
-    fn to_json_value(&self) -> JsonValue {
-        JsonValue::Number(Number::new(self.to_string()))
-    }
-}
-
-impl ToJsonValue for u32 {
-    fn to_json_value(&self) -> JsonValue {
-        JsonValue::Number(Number::new(self.to_string()))
-    }
-}
-
-impl ToJsonValue for u64 {
-    fn to_json_value(&self) -> JsonValue {
-        JsonValue::Number(Number::new(self.to_string()))
-    }
-}
-
-impl ToJsonValue for u128 {
-    fn to_json_value(&self) -> JsonValue {
-        JsonValue::Number(Number::new(self.to_string()))
-    }
-}
-
-impl ToJsonValue for usize {
-    fn to_json_value(&self) -> JsonValue {
-        JsonValue::Number(Number::new(self.to_string()))
-    }
-}
-
-impl ToJsonValue for i8 {
-    fn to_json_value(&self) -> JsonValue {
-        JsonValue::Number(Number::new(self.to_string()))
-    }
-}
-
-impl ToJsonValue for i16 {
-    fn to_json_value(&self) -> JsonValue {
-        JsonValue::Number(Number::new(self.to_string()))
-    }
-}
-
-impl ToJsonValue for i32 {
-    fn to_json_value(&self) -> JsonValue {
-        JsonValue::Number(Number::new(self.to_string()))
-    }
-}
-
-impl ToJsonValue for i64 {
-    fn to_json_value(&self) -> JsonValue {
-        JsonValue::Number(Number::new(self.to_string()))
-    }
-}
-
-impl ToJsonValue for i128 {
-    fn to_json_value(&self) -> JsonValue {
-        JsonValue::Number(Number::new(self.to_string()))
-    }
-}
-
-impl ToJsonValue for isize {
-    fn to_json_value(&self) -> JsonValue {
-        JsonValue::Number(Number::new(self.to_string()))
-    }
-}
-
-impl ToJsonValue for f32 {
-    fn to_json_value(&self) -> JsonValue {
-        JsonValue::Number(Number::new(self.to_string()))
-    }
-}
-
-impl ToJsonValue for f64 {
-    fn to_json_value(&self) -> JsonValue {
-        JsonValue::Number(Number::new(self.to_string()))
-    }
-}
+to_json_value_for_num!(u8, u16, u32, u64, u128, usize, i8, i16, i32, i64, i128, isize, f32, f64);
 
 impl ToJsonValue for String {
     fn to_json_value(&self) -> JsonValue {

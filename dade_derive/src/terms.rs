@@ -3,18 +3,32 @@ use quote::quote;
 use syn::parse::{Parse, ParseStream};
 use syn::{Ident, Lit, LitFloat, LitInt, LitStr, Token};
 
-pub(crate) struct MinLengthTerm {
-    pub value: LitInt,
-}
-
 pub(crate) trait ToToken {
     fn to_token(&self, variable: &Ident) -> TokenStream;
+}
+
+pub(crate) trait ToSchema {
+    fn to_schema(&self) -> TokenStream;
+}
+
+pub(crate) struct MinLengthTerm {
+    pub value: LitInt,
 }
 
 impl ToToken for MinLengthTerm {
     fn to_token(&self, variable: &Ident) -> TokenStream {
         let val = &self.value;
         quote! { #variable.len() >= #val }
+    }
+}
+
+impl ToSchema for MinLengthTerm {
+    fn to_schema(&self) -> TokenStream {
+        let val = &self.value;
+        quote! {
+            "minLength".to_string(),
+            dade::JsonValue::Number(dade::Number::from(#val))
+        }
     }
 }
 
@@ -29,6 +43,16 @@ impl ToToken for MaxLengthTerm {
     }
 }
 
+impl ToSchema for MaxLengthTerm {
+    fn to_schema(&self) -> TokenStream {
+        let val = &self.value;
+        quote! {
+            "maxLength".to_string(),
+            dade::JsonValue::Number(dade::Number::from(#val))
+        }
+    }
+}
+
 pub(crate) struct MinItemsTerm {
     pub value: LitInt,
 }
@@ -40,6 +64,16 @@ impl ToToken for MinItemsTerm {
     }
 }
 
+impl ToSchema for MinItemsTerm {
+    fn to_schema(&self) -> TokenStream {
+        let val = &self.value;
+        quote! {
+            "minItems".to_string(),
+            dade::JsonValue::Number(dade::Number::from(#val))
+        }
+    }
+}
+
 pub(crate) struct MaxItemsTerm {
     pub value: LitInt,
 }
@@ -48,6 +82,15 @@ impl ToToken for MaxItemsTerm {
     fn to_token(&self, variable: &Ident) -> TokenStream {
         let val = &self.value;
         quote! { #variable.len() <= #val }
+    }
+}
+impl ToSchema for MaxItemsTerm {
+    fn to_schema(&self) -> TokenStream {
+        let val = &self.value;
+        quote! {
+            "maxItems".to_string(),
+            dade::JsonValue::Number(dade::Number::from(#val))
+        }
     }
 }
 
@@ -96,6 +139,16 @@ impl ToToken for GtTerm {
     }
 }
 
+impl ToSchema for GtTerm {
+    fn to_schema(&self) -> TokenStream {
+        let val = &self.value;
+        quote! {
+            "exclusiveMinimum".to_string(),
+            dade::JsonValue::Number(dade::Number::from(#val))
+        }
+    }
+}
+
 pub(crate) struct GeTerm {
     pub value: LitNumber,
 }
@@ -104,6 +157,16 @@ impl ToToken for GeTerm {
     fn to_token(&self, variable: &Ident) -> TokenStream {
         let val = &self.value;
         quote! { #variable >= #val }
+    }
+}
+
+impl ToSchema for GeTerm {
+    fn to_schema(&self) -> TokenStream {
+        let val = &self.value;
+        quote! {
+            "minimum".to_string(),
+            dade::JsonValue::Number(dade::Number::from(#val))
+        }
     }
 }
 
@@ -118,6 +181,16 @@ impl ToToken for LtTerm {
     }
 }
 
+impl ToSchema for LtTerm {
+    fn to_schema(&self) -> TokenStream {
+        let val = &self.value;
+        quote! {
+            "exclusiveMaximum".to_string(),
+            dade::JsonValue::Number(dade::Number::from(#val))
+        }
+    }
+}
+
 pub(crate) struct LeTerm {
     pub value: LitNumber,
 }
@@ -129,12 +202,42 @@ impl LeTerm {
     }
 }
 
+impl ToSchema for LeTerm {
+    fn to_schema(&self) -> TokenStream {
+        let val = &self.value;
+        quote! {
+            "maximum".to_string(),
+            dade::JsonValue::Number(dade::Number::from(#val))
+        }
+    }
+}
+
 pub(crate) struct AliasTerm {
     pub value: LitStr,
 }
 
-pub(crate) struct DefaultTerm {
+pub(crate) struct IdentDefaultTerm {
+    pub value: Ident,
+}
+
+pub(crate) struct LitDefaultTerm {
     pub value: Lit,
+}
+
+pub(crate) enum DefaultTerm {
+    Ident(IdentDefaultTerm),
+    Lit(LitDefaultTerm),
+}
+
+impl Parse for DefaultTerm {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        if input.peek(Ident) {
+            let ident: Ident = input.parse()?;
+            return Ok(DefaultTerm::Ident(IdentDefaultTerm { value: ident }));
+        }
+        let lit: Lit = input.parse()?;
+        Ok(DefaultTerm::Lit(LitDefaultTerm { value: lit }))
+    }
 }
 
 pub(crate) struct ValidateTerm {
@@ -203,9 +306,8 @@ impl Parse for Term {
                 value: input.parse()?,
             }))
         } else if ident == "default" {
-            Ok(Term::Default(DefaultTerm {
-                value: input.parse()?,
-            }))
+            let term: DefaultTerm = input.parse()?;
+            Ok(Term::Default(term))
         } else if ident == "validate" {
             Ok(Term::Validate(ValidateTerm {
                 value: input.parse()?,
