@@ -81,7 +81,7 @@ impl<'a> JsonLoader<'a> {
                 // minus = %x2D               ; -
                 // plus = %x2B                ; +
                 // zero = %x30                ; 0
-                '-' | '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' => {
+                _ if ('\u{30}'..='\u{39}').contains(&c) || c == '-' => {
                     let mut val = String::with_capacity(BUFFER_SIZE_NUMBER);
                     // [ minus ]
                     let cc = if c == '-' {
@@ -96,35 +96,41 @@ impl<'a> JsonLoader<'a> {
                     // int = zero / ( digit1-9 *DIGIT )
                     match cc {
                         // zero
-                        '0' => {
-                            val.push(cc);
-                        }
+                        '\u{30}' => val.push(cc),
                         // digit1-9
-                        '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' => {
+                        _ if ('\u{31}'..='\u{39}').contains(&cc) => {
                             val.push(cc);
                             // *DIGIT
-                            while let Some(
-                                ccc @ ('0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9'),
-                            ) = self.chars.peek()
-                            {
-                                val.push(*ccc);
-                                self.chars.next();
+                            loop {
+                                match self.chars.peek() {
+                                    Some(ccc) if ('\u{30}'..='\u{39}').contains(ccc) => {
+                                        val.push(*ccc);
+                                        self.chars.next();
+                                    }
+                                    _ => break,
+                                }
                             }
                         }
                         _ => return Err(Error::new("extra data")),
                     }
                     // frac = decimal-point 1*DIGIT
                     // decimal-point
-                    if let Some(cc @ '.') = self.chars.peek() {
-                        val.push(*cc);
-                        self.chars.next();
+                    if let Some('.') = self.chars.peek() {
+                        val.push(self.chars.next().unwrap());
+                        // 1 DIGIT
+                        match self.chars.next() {
+                            Some(ccc) if ('\u{30}'..='\u{39}').contains(&ccc) => val.push(ccc),
+                            _ => return Err(Error::new("extra data")),
+                        }
                         // *DIGIT
-                        while let Some(
-                            ccc @ ('0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9'),
-                        ) = self.chars.peek()
-                        {
-                            val.push(*ccc);
-                            self.chars.next();
+                        loop {
+                            match self.chars.peek() {
+                                Some(ccc) if ('\u{30}'..='\u{39}').contains(ccc) => {
+                                    val.push(*ccc);
+                                    self.chars.next();
+                                }
+                                _ => break,
+                            }
                         }
                     }
                     // exp = e [ minus / plus ] 1*DIGIT
@@ -138,18 +144,18 @@ impl<'a> JsonLoader<'a> {
                         }
                         // 1 DIGIT
                         match self.chars.next() {
-                            Some(
-                                ccc @ ('0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9'),
-                            ) => val.push(ccc),
+                            Some(ccc) if ('\u{30}'..='\u{39}').contains(&ccc) => val.push(ccc),
                             _ => return Err(Error::new("extra data")),
                         }
                         // *DIGIT
-                        while let Some(
-                            cc @ ('0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9'),
-                        ) = self.chars.peek()
-                        {
-                            val.push(*cc);
-                            self.chars.next();
+                        loop {
+                            match self.chars.peek() {
+                                Some(ccc) if ('\u{30}'..='\u{39}').contains(ccc) => {
+                                    val.push(*ccc);
+                                    self.chars.next();
+                                }
+                                _ => break,
+                            }
                         }
                     }
                     return Ok(JsonValue::Number(Number::new(val)));
@@ -163,48 +169,68 @@ impl<'a> JsonLoader<'a> {
                                 Some('"') => val.push('"'),
                                 Some('\\') => val.push('\\'),
                                 Some('/') => val.push('/'),
-                                Some('b') => val.push(char::from_u32(0x08).unwrap()),
-                                Some('f') => val.push(char::from_u32(0x0C).unwrap()),
+                                Some('b') => val.push('\u{08}'),
+                                Some('f') => val.push('\u{0C}'),
                                 Some('n') => val.push('\n'),
                                 Some('r') => val.push('\r'),
                                 Some('t') => val.push('\t'),
                                 Some('u') => {
-                                    match char::from_u32({
-                                        let mut code = 0;
+                                    let mut buffer = Vec::new();
+                                    loop {
+                                        let mut code = 0u16;
                                         for i in [4096, 256, 16, 1] {
-                                            match self.chars.next() {
-                                                Some('0') => continue,
-                                                Some('1') => code += i,
-                                                Some('2') => code += i * 2,
-                                                Some('3') => code += i * 3,
-                                                Some('4') => code += i * 4,
-                                                Some('5') => code += i * 5,
-                                                Some('6') => code += i * 6,
-                                                Some('7') => code += i * 7,
-                                                Some('8') => code += i * 8,
-                                                Some('9') => code += i * 9,
-                                                Some('a' | 'A') => code += i * 10,
-                                                Some('b' | 'B') => code += i * 11,
-                                                Some('c' | 'C') => code += i * 12,
-                                                Some('d' | 'D') => code += i * 13,
-                                                Some('e' | 'E') => code += i * 14,
-                                                Some('f' | 'F') => code += i * 15,
+                                            code += match self.chars.next() {
+                                                // 0..=9
+                                                Some(ccc)
+                                                    if ('\u{30}'..='\u{39}').contains(&ccc) =>
+                                                {
+                                                    ((ccc as u16) - 48) * i
+                                                }
+                                                // A..=F
+                                                Some(ccc)
+                                                    if ('\u{41}'..='\u{46}').contains(&ccc) =>
+                                                {
+                                                    ((ccc as u16) - 55) * i
+                                                }
+                                                // a..=f
+                                                Some(ccc)
+                                                    if ('\u{61}'..='\u{66}').contains(&ccc) =>
+                                                {
+                                                    ((ccc as u16) - 87) * i
+                                                }
                                                 _ => return Err(Error::new("extra data")),
                                             }
                                         }
-                                        code
-                                    }) {
-                                        Some(ccc) => val.push(ccc),
-                                        None => return Err(Error::new("extra data")),
+                                        buffer.push(code);
+                                        match String::from_utf16(&buffer) {
+                                            Ok(s) => {
+                                                val.push_str(s.as_str());
+                                                break;
+                                            }
+                                            Err(err) => {
+                                                if Some('\\') == self.chars.next()
+                                                    && Some('u') == self.chars.next()
+                                                {
+                                                    continue;
+                                                } else {
+                                                    return Err(Error::new(
+                                                        err.to_string().as_str(),
+                                                    ));
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                                 _ => return Err(Error::new("invalid control character")),
                             },
                             '"' => return Ok(JsonValue::String(val)),
-                            '\r' | '\t' | '\n' => {
-                                return Err(Error::new("invalid control character"))
+                            _ if ('\u{0020}'..='\u{0021}').contains(&cc)
+                                || ('\u{0023}'..='\u{005B}').contains(&cc)
+                                || ('\u{005D}'..='\u{10FFFF}').contains(&cc) =>
+                            {
+                                val.push(cc)
                             }
-                            _ => val.push(cc),
+                            _ => return Err(Error::new("invalid control character")),
                         }
                     }
                     return Err(Error::new("unterminated string"));
@@ -252,12 +278,14 @@ impl<'a> JsonLoader<'a> {
                             _ => break,
                         }
                     }
-
                     loop {
                         let key = match self._load()? {
                             JsonValue::String(key) => key,
                             _ => return Err(Error::new("expect string")),
                         };
+                        if dict.contains_key(&key) {
+                            return Err(Error::new("exists same key"));
+                        }
                         for cc in self.chars.by_ref() {
                             match cc {
                                 ' ' | '\r' | '\t' | '\n' => continue,

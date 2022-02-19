@@ -1,4 +1,5 @@
 # dade
+![Test](https://github.com/odd12258053/dade/workflows/Test/badge.svg)
 
 dade is data definition for Rust structures.
 
