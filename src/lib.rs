@@ -1,6 +1,4 @@
-extern crate indexmap;
-
-use indexmap::IndexMap;
+pub use indexmap::IndexMap;
 
 mod error;
 pub use crate::error::{Error, Result};

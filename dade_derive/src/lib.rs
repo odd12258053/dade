@@ -621,7 +621,7 @@ pub fn model(
                         impl dade::ToJsonValue for #ident {
                             fn to_json_value(&self) -> dade::JsonValue {
                                 dade::JsonValue::Object(
-                                    indexmap::map::IndexMap::from( [#(#maps),*] )
+                                    dade::IndexMap::from( [#(#maps),*] )
                                 )
                             }
                         }
@@ -637,12 +637,12 @@ pub fn model(
                             }
                         }
                         impl dade::RegisterSchema for #ident {
-                            fn register_schema(defs: &mut indexmap::map::IndexMap<String, dade::JsonValue>) -> dade::JsonValue {
+                            fn register_schema(defs: &mut dade::IndexMap<String, dade::JsonValue>) -> dade::JsonValue {
                                 if !defs.contains_key(&#name.to_string()) {
                                     // Insert temporarily value.
                                     defs.insert(#name.to_string(), dade::JsonValue::Null);
                                     let json_value = dade::JsonValue::Object(
-                                            indexmap::map::IndexMap::from([
+                                            dade::IndexMap::from([
                                                 (
                                                     "title".to_string(),
                                                     dade::JsonValue::String(dade::ToTitle::to_title(#name))
@@ -654,7 +654,7 @@ pub fn model(
                                                 (
                                                     "properties".to_string(),
                                                     dade::JsonValue::Object(
-                                                        indexmap::map::IndexMap::from([#(#schemas),*])
+                                                        dade::IndexMap::from([#(#schemas),*])
                                                     )
                                                 ),
                                                 (
@@ -671,7 +671,7 @@ pub fn model(
                                     defs[&#name.to_string()] = json_value;
                                 }
                                 dade::JsonValue::Object(
-                                    indexmap::map::IndexMap::from([
+                                    dade::IndexMap::from([
                                         (
                                             "$ref".to_string(),
                                             dade::JsonValue::String(#def_name.to_string())

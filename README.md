@@ -1,11 +1,12 @@
 # dade
 ![Test](https://github.com/odd12258053/dade/workflows/Test/badge.svg)
+[![Crates.io](https://img.shields.io/crates/v/dade.svg)](https://crates.io/crates/dade)
 
 dade is data definition for Rust structures.
 
 For the easy handle of data, the following will support it.
-+ [ ] Data validation.
-+ [ ] Data schema conforms JsonSchema.
++ [x] Data validation.
++ [x] Data schema conforms JsonSchema.
 
 
 ## Example
