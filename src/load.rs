@@ -1,312 +1,393 @@
+use std::convert::From;
+use std::iter::Iterator;
 use std::iter::Peekable;
-use std::str::Chars;
 
 use indexmap::IndexMap;
 
 use crate::error::{Error, Result};
 use crate::json::{JsonValue, Number};
 
-const BUFFER_SIZE_STRING: usize = 256;
-const BUFFER_SIZE_NUMBER: usize = 32;
 const BUFFER_SIZE_ARRAY: usize = 8;
 const BUFFER_SIZE_OBJECT: usize = 8;
 
-pub struct JsonLoader<'a> {
-    chars: Peekable<Chars<'a>>,
+pub struct JsonLoader<'a, T: Iterator<Item = &'a u8>> {
+    bytes: Peekable<T>,
+    buffer: Vec<u8>,
 }
 
-impl<'a> JsonLoader<'a> {
-    pub fn new(json: &'a str) -> Self {
+impl<'a> From<&'a str> for JsonLoader<'a, std::slice::Iter<'a, u8>> {
+    fn from(json: &'a str) -> Self {
         Self {
-            chars: json.chars().peekable(),
+            bytes: json.as_bytes().iter().peekable(),
+            buffer: Vec::new(),
         }
     }
+}
 
+impl<'a, T: Iterator<Item = &'a u8>> JsonLoader<'a, T> {
     pub fn load(&mut self) -> Result<JsonValue> {
         let val = self._load()?;
-        for c in self.chars.by_ref() {
-            match c {
-                ' ' | '\r' | '\t' | '\n' => continue,
-                _ => return Err(Error::new("extra data")),
-            }
+        self.skip_control_char();
+        if self.bytes.next().is_some() {
+            return Err(Error::new("extra data"));
         }
         Ok(val)
     }
 
-    fn _load(&mut self) -> Result<JsonValue> {
-        while let Some(c) = self.chars.next() {
-            match c {
-                ' ' | '\r' | '\t' | '\n' => continue,
-                // null
-                'n' => {
-                    if Some('u') == self.chars.next()
-                        && Some('l') == self.chars.next()
-                        && Some('l') == self.chars.next()
-                    {
-                        return Ok(JsonValue::Null);
-                    } else {
-                        return Err(Error::new("extra data"));
-                    }
+    #[inline]
+    fn skip_control_char(&mut self) {
+        while self
+            .bytes
+            .next_if(|&b| *b == 0x20 || *b == 0x0d || *b == 0x09 || *b == 0x0a)
+            .is_some()
+        {}
+    }
+
+    fn get_number(&mut self, b: &u8) -> Result<JsonValue> {
+        // number = [ minus ] int [ frac ] [ exp ]
+        // decimal-point = %x2E       ; .
+        // digit1-9 = %x31-39         ; 1-9
+        // e = %x65 / %x45            ; e E
+        // exp = e [ minus / plus ] 1*DIGIT
+        // frac = decimal-point 1*DIGIT
+        // int = zero / ( digit1-9 *DIGIT )
+        // minus = %x2D               ; -
+        // plus = %x2B                ; +
+        // zero = %x30                ; 0
+        self.buffer.clear();
+        macro_rules! one_digit {
+            () => {
+                match self.bytes.next() {
+                    Some(b @ 0x30u8..=0x39) => self.buffer.push(*b),
+                    _ => return Err(Error::new("extra data")),
                 }
-                // true
-                't' => {
-                    if Some('r') == self.chars.next()
-                        && Some('u') == self.chars.next()
-                        && Some('e') == self.chars.next()
-                    {
-                        return Ok(JsonValue::Bool(true));
-                    } else {
-                        return Err(Error::new("extra data"));
-                    }
+            };
+        }
+        macro_rules! many_digit {
+            () => {
+                while let Some(b) = self.bytes.next_if(|&b| (0x30u8..=0x39).contains(b)) {
+                    self.buffer.push(*b);
                 }
-                // false
-                'f' => {
-                    if Some('a') == self.chars.next()
-                        && Some('l') == self.chars.next()
-                        && Some('s') == self.chars.next()
-                        && Some('e') == self.chars.next()
-                    {
-                        return Ok(JsonValue::Bool(false));
-                    } else {
-                        return Err(Error::new("extra data"));
-                    }
+            };
+        }
+
+        // [ minus ]
+        let bb = if b == &0x2d {
+            self.buffer.push(0x2d);
+            match self.bytes.next() {
+                Some(bb) => bb,
+                None => return Err(Error::new("extra data")),
+            }
+        } else {
+            b
+        };
+        // int = zero / ( digit1-9 *DIGIT )
+        match bb {
+            // zero
+            0x30 => self.buffer.push(*bb),
+            // digit1-9
+            0x31..=0x39 => {
+                self.buffer.push(*bb);
+                // *DIGIT
+                many_digit!();
+            }
+            _ => return Err(Error::new("extra data")),
+        }
+        // frac = decimal-point 1*DIGIT
+        // decimal-point
+        if self.bytes.next_if_eq(&&0x2eu8).is_some() {
+            self.buffer.push(0x2e);
+            // 1 DIGIT
+            one_digit!();
+            // *DIGIT
+            many_digit!();
+        }
+        // exp = e [ minus / plus ] 1*DIGIT
+        if let Some(bb) = self.bytes.next_if(|&b| *b == 0x65 || *b == 0x45) {
+            self.buffer.push(*bb);
+            // [ minus / plus ]
+            if let Some(bbb) = self.bytes.next_if(|&b| *b == 0x2d || *b == 0x2b) {
+                self.buffer.push(*bbb);
+            }
+            // 1 DIGIT
+            one_digit!();
+            // *DIGIT
+            many_digit!();
+        }
+        unsafe {
+            Ok(JsonValue::Number(Number::new(String::from_utf8_unchecked(
+                Vec::from(self.buffer.as_slice()),
+            ))))
+        }
+    }
+
+    #[inline]
+    fn handle_escaped_unicode(&mut self) -> Result<()> {
+        macro_rules! to_num {
+            () => {
+                match self.bytes.next() {
+                    // 0..=9
+                    Some(bbb @ 0x30u8..=0x39) => ((*bbb as u16) - 48),
+                    // A..=F
+                    Some(bbb @ 0x41..=0x46) => ((*bbb as u16) - 55),
+                    // a..=f
+                    Some(bbb @ 0x61..=0x66) => ((*bbb as u16) - 87),
+                    _ => return Err(Error::new("extra data")),
                 }
-                // number = [ minus ] int [ frac ] [ exp ]
-                // decimal-point = %x2E       ; .
-                // digit1-9 = %x31-39         ; 1-9
-                // e = %x65 / %x45            ; e E
-                // exp = e [ minus / plus ] 1*DIGIT
-                // frac = decimal-point 1*DIGIT
-                // int = zero / ( digit1-9 *DIGIT )
-                // minus = %x2D               ; -
-                // plus = %x2B                ; +
-                // zero = %x30                ; 0
-                _ if ('\u{30}'..='\u{39}').contains(&c) || c == '-' => {
-                    let mut val = String::with_capacity(BUFFER_SIZE_NUMBER);
-                    // [ minus ]
-                    let cc = if c == '-' {
-                        val.push(c);
-                        match self.chars.next() {
-                            Some(cc) => cc,
-                            None => return Err(Error::new("extra data")),
-                        }
-                    } else {
-                        c
-                    };
-                    // int = zero / ( digit1-9 *DIGIT )
-                    match cc {
-                        // zero
-                        '\u{30}' => val.push(cc),
-                        // digit1-9
-                        _ if ('\u{31}'..='\u{39}').contains(&cc) => {
-                            val.push(cc);
-                            // *DIGIT
-                            loop {
-                                match self.chars.peek() {
-                                    Some(ccc) if ('\u{30}'..='\u{39}').contains(ccc) => {
-                                        val.push(*ccc);
-                                        self.chars.next();
-                                    }
-                                    _ => break,
-                                }
-                            }
-                        }
-                        _ => return Err(Error::new("extra data")),
-                    }
-                    // frac = decimal-point 1*DIGIT
-                    // decimal-point
-                    if let Some('.') = self.chars.peek() {
-                        val.push(self.chars.next().unwrap());
-                        // 1 DIGIT
-                        match self.chars.next() {
-                            Some(ccc) if ('\u{30}'..='\u{39}').contains(&ccc) => val.push(ccc),
-                            _ => return Err(Error::new("extra data")),
-                        }
-                        // *DIGIT
-                        loop {
-                            match self.chars.peek() {
-                                Some(ccc) if ('\u{30}'..='\u{39}').contains(ccc) => {
-                                    val.push(*ccc);
-                                    self.chars.next();
-                                }
-                                _ => break,
-                            }
-                        }
-                    }
-                    // exp = e [ minus / plus ] 1*DIGIT
-                    if let Some(cc @ ('e' | 'E')) = self.chars.peek() {
-                        val.push(*cc);
-                        self.chars.next();
-                        // [ minus / plus ]
-                        if let Some(ccc @ ('-' | '+')) = self.chars.peek() {
-                            val.push(*ccc);
-                            self.chars.next();
-                        }
-                        // 1 DIGIT
-                        match self.chars.next() {
-                            Some(ccc) if ('\u{30}'..='\u{39}').contains(&ccc) => val.push(ccc),
-                            _ => return Err(Error::new("extra data")),
-                        }
-                        // *DIGIT
-                        loop {
-                            match self.chars.peek() {
-                                Some(ccc) if ('\u{30}'..='\u{39}').contains(ccc) => {
-                                    val.push(*ccc);
-                                    self.chars.next();
-                                }
-                                _ => break,
-                            }
-                        }
-                    }
-                    return Ok(JsonValue::Number(Number::new(val)));
+            };
+        }
+
+        let code = (to_num!() * 16) + to_num!();
+        match if (216..=219).contains(&code) {
+            let code = (code * 256) + (to_num!() * 16) + to_num!();
+            if !(Some(&0x5c) == self.bytes.next() && Some(&0x75) == self.bytes.next()) {
+                return Err(Error::new("extra data"));
+            }
+            String::from_utf16(&[
+                code,
+                (to_num!() * 4096) + (to_num!() * 256) + (to_num!() * 16) + to_num!(),
+            ])
+        } else {
+            String::from_utf16(&[(code * 256) + (to_num!() * 16) + to_num!()])
+        } {
+            Ok(s) => {
+                self.buffer.extend_from_slice(s.as_bytes());
+                Ok(())
+            }
+            Err(err) => Err(Error::new(err.to_string().as_str())),
+        }
+    }
+
+    #[inline]
+    fn handle_escaped_str(&mut self) -> Result<()> {
+        match self.bytes.next() {
+            Some(0x22) => self.buffer.push(0x22),
+            Some(0x5c) => self.buffer.push(0x5c),
+            Some(0x2f) => self.buffer.push(0x2f),
+            Some(0x62) => self.buffer.push(0x08),
+            Some(0x66) => self.buffer.push(0x0c),
+            Some(0x6e) => self.buffer.push(0x0a),
+            Some(0x72) => self.buffer.push(0x0d),
+            Some(0x74) => self.buffer.push(0x09),
+            Some(0x75) => self.handle_escaped_unicode()?,
+            _ => return Err(Error::new("invalid control character")),
+        }
+        Ok(())
+    }
+
+    fn _get_string(&mut self) -> Result<String> {
+        // string = quotation-mark *char quotation-mark
+        //
+        // char = unescaped /
+        //     escape (
+        //         %x22 /          ; "    quotation mark  U+0022
+        //         %x5C /          ; \    reverse solidus U+005C
+        //         %x2F /          ; /    solidus         U+002F
+        //         %x62 /          ; b    backspace       U+0008
+        //         %x66 /          ; f    form feed       U+000C
+        //         %x6E /          ; n    line feed       U+000A
+        //         %x72 /          ; r    carriage return U+000D
+        //         %x74 /          ; t    tab             U+0009
+        //         %x75 4HEXDIG )  ; uXXXX                U+XXXX
+        //
+        // escape = %x5C              ; \
+        //
+        // quotation-mark = %x22      ; "
+        //
+        // unescaped = %x20-21 / %x23-5B / %x5D-10FFFF
+        self.buffer.clear();
+        let mut buf = [0; 4];
+
+        macro_rules! handle_unicode {
+            ($i: literal, $range: pat_param) => {
+                match self.bytes.next() {
+                    Some(bbb @ $range) => buf[$i] = *bbb,
+                    _ => return Err(Error::new("invalid utf-8 character")),
                 }
-                // string
-                '"' => {
-                    let mut val = String::with_capacity(BUFFER_SIZE_STRING);
-                    while let Some(cc) = self.chars.next() {
-                        match cc {
-                            '\\' => match self.chars.next() {
-                                Some('"') => val.push('"'),
-                                Some('\\') => val.push('\\'),
-                                Some('/') => val.push('/'),
-                                Some('b') => val.push('\u{08}'),
-                                Some('f') => val.push('\u{0C}'),
-                                Some('n') => val.push('\n'),
-                                Some('r') => val.push('\r'),
-                                Some('t') => val.push('\t'),
-                                Some('u') => {
-                                    let mut buffer = Vec::new();
-                                    loop {
-                                        let mut code = 0u16;
-                                        for i in [4096, 256, 16, 1] {
-                                            code += match self.chars.next() {
-                                                // 0..=9
-                                                Some(ccc)
-                                                    if ('\u{30}'..='\u{39}').contains(&ccc) =>
-                                                {
-                                                    ((ccc as u16) - 48) * i
-                                                }
-                                                // A..=F
-                                                Some(ccc)
-                                                    if ('\u{41}'..='\u{46}').contains(&ccc) =>
-                                                {
-                                                    ((ccc as u16) - 55) * i
-                                                }
-                                                // a..=f
-                                                Some(ccc)
-                                                    if ('\u{61}'..='\u{66}').contains(&ccc) =>
-                                                {
-                                                    ((ccc as u16) - 87) * i
-                                                }
-                                                _ => return Err(Error::new("extra data")),
-                                            }
-                                        }
-                                        buffer.push(code);
-                                        match String::from_utf16(&buffer) {
-                                            Ok(s) => {
-                                                val.push_str(s.as_str());
-                                                break;
-                                            }
-                                            Err(err) => {
-                                                if Some('\\') == self.chars.next()
-                                                    && Some('u') == self.chars.next()
-                                                {
-                                                    continue;
-                                                } else {
-                                                    return Err(Error::new(
-                                                        err.to_string().as_str(),
-                                                    ));
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                                _ => return Err(Error::new("invalid control character")),
-                            },
-                            '"' => return Ok(JsonValue::String(val)),
-                            _ if ('\u{0020}'..='\u{0021}').contains(&cc)
-                                || ('\u{0023}'..='\u{005B}').contains(&cc)
-                                || ('\u{005D}'..='\u{10FFFF}').contains(&cc) =>
-                            {
-                                val.push(cc)
-                            }
-                            _ => return Err(Error::new("invalid control character")),
-                        }
-                    }
-                    return Err(Error::new("unterminated string"));
+            };
+        }
+
+        loop {
+            match self.bytes.next() {
+                Some(0x22) => unsafe {
+                    return Ok(String::from_utf8_unchecked(Vec::from(
+                        self.buffer.as_slice(),
+                    )));
+                },
+                Some(0x5c) => self.handle_escaped_str()?,
+                // ref: https://www.unicode.org/versions/Unicode14.0.0/ch03.pdf
+                Some(bb @ (0x20..=0x21 | 0x23..=0x5b | 0x5d..=0x7f)) => {
+                    self.buffer.push(*bb);
                 }
-                // array
-                '[' => {
-                    let mut vec = Vec::with_capacity(BUFFER_SIZE_ARRAY);
-                    loop {
-                        match self.chars.peek() {
-                            Some(' ' | '\r' | '\t' | '\n') => {
-                                self.chars.next();
-                            }
-                            Some(']') => {
-                                self.chars.next();
-                                return Ok(JsonValue::Array(vec));
-                            }
-                            _ => break,
-                        }
-                    }
-                    loop {
-                        vec.push(self._load()?);
-                        for cc in self.chars.by_ref() {
-                            match cc {
-                                ' ' | '\r' | '\t' | '\n' => continue,
-                                ',' => break,
-                                ']' => return Ok(JsonValue::Array(vec)),
-                                _ => return Err(Error::new("extra data")),
-                            }
-                        }
-                    }
+                Some(bb @ 0xc2..=0xdf) => {
+                    buf[0] = *bb;
+                    handle_unicode!(1, 0x80..=0xbf);
+                    self.buffer.extend_from_slice(&buf[..2])
                 }
-                // object
-                '{' => {
-                    let mut dict: IndexMap<String, JsonValue> =
-                        IndexMap::with_capacity(BUFFER_SIZE_OBJECT);
-                    loop {
-                        match self.chars.peek() {
-                            Some(' ' | '\r' | '\t' | '\n') => {
-                                self.chars.next();
-                            }
-                            Some('}') => {
-                                self.chars.next();
-                                return Ok(JsonValue::Object(dict));
-                            }
-                            _ => break,
-                        }
-                    }
-                    loop {
-                        let key = match self._load()? {
-                            JsonValue::String(key) => key,
-                            _ => return Err(Error::new("expect string")),
-                        };
-                        if dict.contains_key(&key) {
-                            return Err(Error::new("exists same key"));
-                        }
-                        for cc in self.chars.by_ref() {
-                            match cc {
-                                ' ' | '\r' | '\t' | '\n' => continue,
-                                ':' => break,
-                                _ => return Err(Error::new("extra data")),
-                            }
-                        }
-                        dict.insert(key, self._load()?);
-                        for cc in self.chars.by_ref() {
-                            match cc {
-                                ' ' | '\r' | '\t' | '\n' => continue,
-                                ',' => break,
-                                '}' => return Ok(JsonValue::Object(dict)),
-                                _ => return Err(Error::new("extra data")),
-                            }
-                        }
-                    }
+                Some(0xe0) => {
+                    buf[0] = 0xe0;
+                    handle_unicode!(1, 0xa0..=0xbf);
+                    handle_unicode!(2, 0x80..=0xbf);
+                    self.buffer.extend_from_slice(&buf[..3])
                 }
-                _ => break,
+                Some(bb @ 0xe1..=0xec) => {
+                    buf[0] = *bb;
+                    handle_unicode!(1, 0x80..=0xbf);
+                    handle_unicode!(2, 0x80..=0xbf);
+                    self.buffer.extend_from_slice(&buf[..3])
+                }
+                Some(0xed) => {
+                    buf[0] = 0xed;
+                    handle_unicode!(1, 0x80..=0x9f);
+                    handle_unicode!(2, 0x80..=0xbf);
+                    self.buffer.extend_from_slice(&buf[..3])
+                }
+                Some(bb @ 0xee..=0xef) => {
+                    buf[0] = *bb;
+                    handle_unicode!(1, 0x80..=0xbf);
+                    handle_unicode!(2, 0x80..=0xbf);
+                    self.buffer.extend_from_slice(&buf[..3])
+                }
+                Some(0xf0) => {
+                    buf[0] = 0xf0;
+                    handle_unicode!(1, 0x90..=0xbf);
+                    handle_unicode!(2, 0x80..=0xbf);
+                    handle_unicode!(3, 0x80..=0xbf);
+                    self.buffer.extend_from_slice(&buf)
+                }
+                Some(bb @ 0xf1..=0xf3) => {
+                    buf[0] = *bb;
+                    handle_unicode!(1, 0x80..=0xbf);
+                    handle_unicode!(2, 0x80..=0xbf);
+                    handle_unicode!(3, 0x80..=0xbf);
+                    self.buffer.extend_from_slice(&buf)
+                }
+                Some(0xf4) => {
+                    buf[0] = 0xf4;
+                    handle_unicode!(1, 0x80..=0xbf);
+                    handle_unicode!(2, 0x80..=0xbf);
+                    handle_unicode!(3, 0x80..=0xbf);
+                    self.buffer.extend_from_slice(&buf)
+                }
+                None => return Err(Error::new("unterminated string")),
+                _ => return Err(Error::new("invalid control character")),
             }
         }
-        Err(Error::new("expect value, found no data"))
+    }
+
+    fn get_string(&mut self) -> Result<JsonValue> {
+        Ok(JsonValue::String(self._get_string()?))
+    }
+
+    fn get_null(&mut self) -> Result<JsonValue> {
+        if self
+            .bytes
+            .next_if_eq(&&0x75u8)
+            .and(self.bytes.next_if_eq(&&0x6cu8))
+            .and(self.bytes.next_if_eq(&&0x6cu8))
+            .is_some()
+        {
+            Ok(JsonValue::Null)
+        } else {
+            Err(Error::new("extra data"))
+        }
+    }
+
+    fn get_true(&mut self) -> Result<JsonValue> {
+        if self
+            .bytes
+            .next_if_eq(&&0x72u8)
+            .and(self.bytes.next_if_eq(&&0x75u8))
+            .and(self.bytes.next_if_eq(&&0x65u8))
+            .is_some()
+        {
+            Ok(JsonValue::Bool(true))
+        } else {
+            Err(Error::new("extra data"))
+        }
+    }
+
+    fn get_false(&mut self) -> Result<JsonValue> {
+        if self
+            .bytes
+            .next_if_eq(&&0x61u8)
+            .and(self.bytes.next_if_eq(&&0x6cu8))
+            .and(self.bytes.next_if_eq(&&0x73u8))
+            .and(self.bytes.next_if_eq(&&0x65u8))
+            .is_some()
+        {
+            Ok(JsonValue::Bool(false))
+        } else {
+            Err(Error::new("extra data"))
+        }
+    }
+
+    fn get_array(&mut self) -> Result<JsonValue> {
+        self.skip_control_char();
+        if self.bytes.next_if_eq(&&0x5du8).is_some() {
+            return Ok(JsonValue::Array(Vec::new()));
+        }
+        let mut vec = Vec::with_capacity(BUFFER_SIZE_ARRAY);
+        loop {
+            vec.push(self._load()?);
+            self.skip_control_char();
+            match self.bytes.next() {
+                Some(0x2c) => {}
+                Some(0x5d) => return Ok(JsonValue::Array(vec)),
+                _ => return Err(Error::new("extra data")),
+            }
+        }
+    }
+
+    fn get_object(&mut self) -> Result<JsonValue> {
+        self.skip_control_char();
+        if self.bytes.next_if_eq(&&0x7du8).is_some() {
+            return Ok(JsonValue::Object(IndexMap::new()));
+        }
+        let mut dict = IndexMap::with_capacity(BUFFER_SIZE_OBJECT);
+
+        loop {
+            self.skip_control_char();
+            if self.bytes.next_if_eq(&&0x22).is_some() {
+                let key = self._get_string()?;
+                self.skip_control_char();
+                if self.bytes.next_if_eq(&&0x3au8).is_none() {
+                    return Err(Error::new("extra data"));
+                }
+                if dict.insert(key, self._load()?).is_some() {
+                    return Err(Error::new("exists same key"));
+                }
+                self.skip_control_char();
+                match self.bytes.next() {
+                    Some(0x2c) => {}
+                    Some(0x7d) => return Ok(JsonValue::Object(dict)),
+                    _ => return Err(Error::new("extra data")),
+                }
+            } else {
+                return Err(Error::new("expect string"));
+            }
+        }
+    }
+
+    #[inline]
+    fn _load(&mut self) -> Result<JsonValue> {
+        self.skip_control_char();
+        match self.bytes.next() {
+            // null
+            Some(&0x6e) => self.get_null(),
+            // true
+            Some(&0x74) => self.get_true(),
+            // false
+            Some(&0x66) => self.get_false(),
+            // number
+            Some(b @ (0x30..=0x39 | 0x2d)) => self.get_number(b),
+            // string
+            Some(&0x22) => self.get_string(),
+            // array
+            Some(&0x5b) => self.get_array(),
+            // object
+            Some(&0x7b) => self.get_object(),
+            _ => Err(Error::new("expect value, found no data")),
+        }
     }
 }

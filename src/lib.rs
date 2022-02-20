@@ -42,7 +42,7 @@ pub fn json_dump(json: &JsonValue, ensure_ascii: bool) -> String {
 }
 
 pub fn json_load(json: &str) -> Result<JsonValue> {
-    JsonLoader::new(json).load()
+    JsonLoader::from(json).load()
 }
 
 pub trait Model {

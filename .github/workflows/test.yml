@@ -27,6 +27,5 @@ jobs:
         with:
           toolchain: stable
       - run: rustup component add clippy
-      - run: cargo check
       - run: cargo fmt --check
       - run: cargo clippy -- -D warnings

@@ -20,5 +20,3 @@ members = [
 ]
 
 [dev-dependencies]
-# For benchmark
-serde_json = "1.0.79"
