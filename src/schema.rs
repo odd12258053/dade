@@ -1,6 +1,7 @@
 use crate::json::JsonValue;
 use indexmap::IndexMap;
 
+/// A trait defines the format to define the schema for a model or a field.
 pub trait RegisterSchema {
     fn register_schema(defs: &mut IndexMap<String, JsonValue>) -> JsonValue;
 }

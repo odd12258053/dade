@@ -1,3 +1,28 @@
+//!
+//! If you want to write a model definition, this crate is needed. You need usage and more information, check this document [`dade`].
+//!
+//! [`dade`]: ../dade/index.html
+//!
+//! ```rust
+//! use dade::Model;
+//! use dade_derive::model;
+//!
+//! #[model]
+//! struct User {
+//!     #[field(ge = 1)]
+//!     id: u64,
+//!     #[field(min_length = 1, max_length = 100)]
+//!     name: String,
+//!     #[field(default = "en")]
+//!     lang: String,
+//!     #[field(min_length = 1, max_length = 255, default = null)]
+//!     url: Option<String>,
+//!     #[field(default = false)]
+//!     verified: bool,
+//! }
+//! ```
+
+
 extern crate quote;
 
 extern crate proc_macro;
@@ -152,6 +177,7 @@ impl ModelType {
     }
 }
 
+/// This macro is to define a model.
 #[proc_macro_attribute]
 pub fn model(
     _attr: proc_macro::TokenStream,

@@ -30,12 +30,19 @@ impl ToString for Number {
     }
 }
 
+/// Types for conforms JSON.
 pub enum JsonValue {
+    /// Correspond for null in JSON.
     Null,
+    /// Correspond for boolean in JSON.
     Bool(bool),
+    /// Correspond for number in JSON.
     Number(Number),
+    /// Correspond for string in JSON.
     String(String),
+    /// Correspond for array in JSON.
     Array(Vec<JsonValue>),
+    /// Correspond for object in JSON.
     Object(IndexMap<String, JsonValue>),
 }
 
@@ -45,6 +52,7 @@ impl ToString for JsonValue {
     }
 }
 
+/// A trait defines as the format to convert data to an instance.
 pub trait FromJsonValue: Sized {
     fn from_json_value(value: &JsonValue) -> Result<Self>;
 }
@@ -146,6 +154,7 @@ impl<T: FromJsonValue> FromJsonValue for Box<T> {
     }
 }
 
+/// A trait defines as the format to get data from the instance.
 pub trait ToJsonValue {
     fn to_json_value(&self) -> JsonValue;
 }
