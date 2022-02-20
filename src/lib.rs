@@ -141,7 +141,6 @@
 //! }
 //! ```
 
-
 pub use indexmap::IndexMap;
 
 mod error;
@@ -158,7 +157,6 @@ pub use crate::load::JsonLoader;
 
 mod schema;
 pub use crate::schema::RegisterSchema;
-
 
 /// A trait for converting string to titlecased.
 pub trait ToTitle {

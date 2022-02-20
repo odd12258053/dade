@@ -22,7 +22,6 @@
 //! }
 //! ```
 
-
 extern crate quote;
 
 extern crate proc_macro;
