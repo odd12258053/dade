@@ -140,8 +140,9 @@
 //!     related_items: Option<Vec<Box<Item>>>,
 //! }
 //! ```
+use std::collections::BTreeMap;
 
-pub use indexmap::IndexMap;
+pub use dade_derive::model;
 
 mod error;
 pub use crate::error::{Error, Result};
@@ -240,12 +241,12 @@ impl<T: ToJsonValue + FromJsonValue + RegisterSchema> Model for T {
         json_dump(&ToJsonValue::to_json_value(self), ensure_ascii)
     }
     fn schema() -> String {
-        let mut defs = IndexMap::new();
+        let mut defs = BTreeMap::new();
         let json_value = <T as RegisterSchema>::register_schema(&mut defs);
         match json_value {
             JsonValue::Object(ref dict) => {
                 if let Some(JsonValue::String(def_name)) = dict.get(&"$ref".to_string()) {
-                    return JsonValue::Object(IndexMap::from([
+                    return JsonValue::Object(BTreeMap::from([
                         ("$ref".to_string(), JsonValue::String(def_name.to_string())),
                         ("definitions".to_string(), JsonValue::Object(defs)),
                     ]))

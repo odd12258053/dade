@@ -1,5 +1,4 @@
-use dade::Model;
-use dade_derive::model;
+use dade::{model, Model};
 
 fn test(a: usize) -> dade::Result<usize> {
     Ok(a)
@@ -44,7 +43,7 @@ fn test_model() {
     assert_eq!(foo.v6, ());
     assert_eq!(
         foo.json(false),
-        "{\"v1\":2.2,\"v2\":10,\"v3\":\"abc\",\"v4\":true,\"bar\":{\"w1\":10},\"v6\":null}"
+        "{\"bar\":{\"w1\":10},\"v1\":2.2,\"v2\":10,\"v3\":\"abc\",\"v4\":true,\"v6\":null}"
     );
 }
 
@@ -61,19 +60,19 @@ fn test_nested_model() {
     let json = "{\"id\": 1}";
     let ret = Nested::parse(json);
     assert!(ret.is_ok(), "{}", ret.err().unwrap().to_string());
-    assert_eq!(ret.unwrap().json(false), "{\"id\":1,\"child\":null}");
+    assert_eq!(ret.unwrap().json(false), "{\"child\":null,\"id\":1}");
 
     let json = "{\"id\": 1, \"child\": null}";
     let ret = Nested::parse(json);
     assert!(ret.is_ok(), "{}", ret.err().unwrap().to_string());
-    assert_eq!(ret.unwrap().json(false), "{\"id\":1,\"child\":null}");
+    assert_eq!(ret.unwrap().json(false), "{\"child\":null,\"id\":1}");
 
     let json = "{\"id\": 1, \"child\": {\"id\": 2}}";
     let ret = Nested::parse(json);
     assert!(ret.is_ok(), "{}", ret.err().unwrap().to_string());
     assert_eq!(
         ret.unwrap().json(false),
-        "{\"id\":1,\"child\":{\"id\":2,\"child\":null}}"
+        "{\"child\":{\"child\":null,\"id\":2},\"id\":1}"
     );
 
     let json = "{\"id\": 1, \"child\": {\"id\": 2, \"child\": {\"id\": 3}}}";
@@ -81,7 +80,7 @@ fn test_nested_model() {
     assert!(ret.is_ok(), "{}", ret.err().unwrap().to_string());
     assert_eq!(
         ret.unwrap().json(false),
-        "{\"id\":1,\"child\":{\"id\":2,\"child\":{\"id\":3,\"child\":null}}}"
+        "{\"child\":{\"child\":{\"child\":null,\"id\":3},\"id\":2},\"id\":1}"
     );
 }
 

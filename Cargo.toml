@@ -12,7 +12,6 @@ categories = ["data-structures", "encoding"]
 
 [dependencies]
 dade_derive = { version="0.1.3", path = "./dade_derive" }
-indexmap = "1.8.0"
 
 [workspace]
 members = [

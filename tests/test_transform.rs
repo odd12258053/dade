@@ -72,7 +72,7 @@ test_success!(
 test_success_with_correct!(
     test_object_key_nfc_nfd,
     "./tests/data/transform/object_key_nfc_nfd.json",
-    "{\"é\":\"NFC\",\"e\\u0301\":\"NFD\"}"
+    "{\"e\\u0301\":\"NFD\",\"é\":\"NFC\"}"
 );
 //TODO; When fix dump, we will fix a correct.
 test_success_with_correct!(

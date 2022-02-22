@@ -524,7 +524,7 @@ test_fail!(
 test_success_with_correct!(
     y_object_long_strings,
     "./tests/data/parsing/y_object_long_strings.json",
-    "{\"x\":[{\"id\":\"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"}],\"id\":\"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"}"
+    "{\"id\":\"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\",\"x\":[{\"id\":\"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"}]}"
 );
 test_success_with_correct!(
     y_string_last_surrogates_1_and_2,
@@ -861,7 +861,7 @@ test_success!(y_number, "./tests/data/parsing/y_number.json");
 test_success_with_correct!(
     y_object_extreme_numbers,
     "./tests/data/parsing/y_object_extreme_numbers.json",
-    "{\"min\":-1.0e+28,\"max\":1.0e+28}"
+    "{\"max\":1.0e+28,\"min\":-1.0e+28}"
 );
 test_success_with_correct!(
     y_array_with_1_and_newline,

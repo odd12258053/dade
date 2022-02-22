@@ -14,8 +14,7 @@ For the easy handle of data, the following will support it.
 To define a model, You need the below module.
 
 ```rust
-use dade::Model;
-use dade_derive::model;
+use dade::{Model, model};
 ```
 
 For example, define user-model.

@@ -1,14 +1,10 @@
+use std::collections::BTreeMap;
 use std::convert::From;
 use std::iter::Iterator;
 use std::iter::Peekable;
 
-use indexmap::IndexMap;
-
 use crate::error::{Error, Result};
 use crate::json::{JsonValue, Number};
-
-const BUFFER_SIZE_ARRAY: usize = 8;
-const BUFFER_SIZE_OBJECT: usize = 8;
 
 pub struct JsonLoader<'a, T: Iterator<Item = &'a u8>> {
     bytes: Peekable<T>,
@@ -29,7 +25,7 @@ impl<'a, T: Iterator<Item = &'a u8>> JsonLoader<'a, T> {
         let val = self._load()?;
         self.skip_control_char();
         if self.bytes.next().is_some() {
-            return Err(Error::new("extra data"));
+            return Err(Error::new_parse_err("extra data"));
         }
         Ok(val)
     }
@@ -59,7 +55,7 @@ impl<'a, T: Iterator<Item = &'a u8>> JsonLoader<'a, T> {
             () => {
                 match self.bytes.next() {
                     Some(b @ 0x30u8..=0x39) => self.buffer.push(*b),
-                    _ => return Err(Error::new("extra data")),
+                    _ => return Err(Error::new_parse_err("extra data")),
                 }
             };
         }
@@ -76,7 +72,7 @@ impl<'a, T: Iterator<Item = &'a u8>> JsonLoader<'a, T> {
             self.buffer.push(0x2d);
             match self.bytes.next() {
                 Some(bb) => bb,
-                None => return Err(Error::new("extra data")),
+                None => return Err(Error::new_parse_err("extra data")),
             }
         } else {
             b
@@ -91,7 +87,7 @@ impl<'a, T: Iterator<Item = &'a u8>> JsonLoader<'a, T> {
                 // *DIGIT
                 many_digit!();
             }
-            _ => return Err(Error::new("extra data")),
+            _ => return Err(Error::new_parse_err("extra data")),
         }
         // frac = decimal-point 1*DIGIT
         // decimal-point
@@ -123,6 +119,7 @@ impl<'a, T: Iterator<Item = &'a u8>> JsonLoader<'a, T> {
 
     #[inline]
     fn handle_escaped_unicode(&mut self) -> Result<()> {
+        // ref: https://www.unicode.org/versions/Unicode14.0.0/ch03.pdf
         macro_rules! to_num {
             () => {
                 match self.bytes.next() {
@@ -132,30 +129,48 @@ impl<'a, T: Iterator<Item = &'a u8>> JsonLoader<'a, T> {
                     Some(bbb @ 0x41..=0x46) => ((*bbb as u16) - 55),
                     // a..=f
                     Some(bbb @ 0x61..=0x66) => ((*bbb as u16) - 87),
-                    _ => return Err(Error::new("extra data")),
+                    _ => return Err(Error::new_parse_err("extra data")),
                 }
             };
         }
 
-        let code = (to_num!() * 16) + to_num!();
-        match if (216..=219).contains(&code) {
-            let code = (code * 256) + (to_num!() * 16) + to_num!();
-            if !(Some(&0x5c) == self.bytes.next() && Some(&0x75) == self.bytes.next()) {
-                return Err(Error::new("extra data"));
+        let code = (to_num!() << 12) + (to_num!() << 8) + (to_num!() << 4) + to_num!();
+        if !(0xD800..=0xDFFF).contains(&code) {
+            if code < 0x80 {
+                self.buffer.push((code & 0x00FF) as u8)
+            } else if code < 0x800 {
+                self.buffer.extend_from_slice(&[
+                    (0b11000000 | ((code & 0b0000011111000000) >> 6)) as u8,
+                    (0b10000000 | (code & 0b0000000000111111)) as u8,
+                ]);
+            } else {
+                self.buffer.extend_from_slice(&[
+                    (0b11100000 | ((code & 0b1111000000000000) >> 12)) as u8,
+                    (0b10000000 | ((code & 0b0000111111000000) >> 6)) as u8,
+                    (0b10000000 | (code & 0b0000000000111111)) as u8,
+                ]);
             }
-            String::from_utf16(&[
-                code,
-                (to_num!() * 4096) + (to_num!() * 256) + (to_num!() * 16) + to_num!(),
-            ])
         } else {
-            String::from_utf16(&[(code * 256) + (to_num!() * 16) + to_num!()])
-        } {
-            Ok(s) => {
-                self.buffer.extend_from_slice(s.as_bytes());
-                Ok(())
+            if code > 0xDBFF {
+                return Err(Error::new_parse_err("no surrogate key"));
             }
-            Err(err) => Err(Error::new(err.to_string().as_str())),
+            if !(Some(&0x5c) == self.bytes.next() && Some(&0x75) == self.bytes.next()) {
+                return Err(Error::new_parse_err("extra data"));
+            }
+            let code2 = (to_num!() << 12) + (to_num!() << 8) + (to_num!() << 4) + to_num!();
+            if !(0xDC00..=0xDFFF).contains(&code2) {
+                return Err(Error::new_parse_err("no surrogate key"));
+            }
+            let u = ((code & 0b0000001111000000) >> 6) + 1;
+            let x = ((code & 0b0000000000111111) << 10) + (code2 & 0b0000001111111111);
+            self.buffer.extend_from_slice(&[
+                (0b11110000 + (u >> 2)) as u8,
+                (0b10000000 + ((0b00000011 & u) << 4) + ((0b1111000000000000 & x) >> 12)) as u8,
+                (0b10000000 + ((0b0000111111000000 & x) >> 6)) as u8,
+                (0b10000000 + (0b0000000000111111 & x)) as u8,
+            ]);
         }
+        Ok(())
     }
 
     #[inline]
@@ -170,7 +185,7 @@ impl<'a, T: Iterator<Item = &'a u8>> JsonLoader<'a, T> {
             Some(0x72) => self.buffer.push(0x0d),
             Some(0x74) => self.buffer.push(0x09),
             Some(0x75) => self.handle_escaped_unicode()?,
-            _ => return Err(Error::new("invalid control character")),
+            _ => return Err(Error::new_parse_err("invalid control character")),
         }
         Ok(())
     }
@@ -202,7 +217,7 @@ impl<'a, T: Iterator<Item = &'a u8>> JsonLoader<'a, T> {
             ($i: literal, $range: pat_param) => {
                 match self.bytes.next() {
                     Some(bbb @ $range) => buf[$i] = *bbb,
-                    _ => return Err(Error::new("invalid utf-8 character")),
+                    _ => return Err(Error::new_parse_err("invalid utf-8 character")),
                 }
             };
         }
@@ -269,8 +284,8 @@ impl<'a, T: Iterator<Item = &'a u8>> JsonLoader<'a, T> {
                     handle_unicode!(3, 0x80..=0xbf);
                     self.buffer.extend_from_slice(&buf)
                 }
-                None => return Err(Error::new("unterminated string")),
-                _ => return Err(Error::new("invalid control character")),
+                None => return Err(Error::new_parse_err("unterminated string")),
+                _ => return Err(Error::new_parse_err("invalid control character")),
             }
         }
     }
@@ -289,7 +304,7 @@ impl<'a, T: Iterator<Item = &'a u8>> JsonLoader<'a, T> {
         {
             Ok(JsonValue::Null)
         } else {
-            Err(Error::new("extra data"))
+            Err(Error::new_parse_err("extra data"))
         }
     }
 
@@ -303,7 +318,7 @@ impl<'a, T: Iterator<Item = &'a u8>> JsonLoader<'a, T> {
         {
             Ok(JsonValue::Bool(true))
         } else {
-            Err(Error::new("extra data"))
+            Err(Error::new_parse_err("extra data"))
         }
     }
 
@@ -318,7 +333,7 @@ impl<'a, T: Iterator<Item = &'a u8>> JsonLoader<'a, T> {
         {
             Ok(JsonValue::Bool(false))
         } else {
-            Err(Error::new("extra data"))
+            Err(Error::new_parse_err("extra data"))
         }
     }
 
@@ -327,44 +342,43 @@ impl<'a, T: Iterator<Item = &'a u8>> JsonLoader<'a, T> {
         if self.bytes.next_if_eq(&&0x5du8).is_some() {
             return Ok(JsonValue::Array(Vec::new()));
         }
-        let mut vec = Vec::with_capacity(BUFFER_SIZE_ARRAY);
+        let mut vec = Vec::new();
         loop {
             vec.push(self._load()?);
             self.skip_control_char();
             match self.bytes.next() {
                 Some(0x2c) => {}
                 Some(0x5d) => return Ok(JsonValue::Array(vec)),
-                _ => return Err(Error::new("extra data")),
+                _ => return Err(Error::new_parse_err("extra data")),
             }
         }
     }
 
     fn get_object(&mut self) -> Result<JsonValue> {
         self.skip_control_char();
+        let mut dict = BTreeMap::new();
         if self.bytes.next_if_eq(&&0x7du8).is_some() {
-            return Ok(JsonValue::Object(IndexMap::new()));
+            return Ok(JsonValue::Object(dict));
         }
-        let mut dict = IndexMap::with_capacity(BUFFER_SIZE_OBJECT);
-
         loop {
             self.skip_control_char();
             if self.bytes.next_if_eq(&&0x22).is_some() {
                 let key = self._get_string()?;
                 self.skip_control_char();
                 if self.bytes.next_if_eq(&&0x3au8).is_none() {
-                    return Err(Error::new("extra data"));
+                    return Err(Error::new_parse_err("extra data"));
                 }
                 if dict.insert(key, self._load()?).is_some() {
-                    return Err(Error::new("exists same key"));
+                    return Err(Error::new_parse_err("exists same key"));
                 }
                 self.skip_control_char();
                 match self.bytes.next() {
                     Some(0x2c) => {}
                     Some(0x7d) => return Ok(JsonValue::Object(dict)),
-                    _ => return Err(Error::new("extra data")),
+                    _ => return Err(Error::new_parse_err("extra data")),
                 }
             } else {
-                return Err(Error::new("expect string"));
+                return Err(Error::new_parse_err("expect string"));
             }
         }
     }
@@ -387,7 +401,7 @@ impl<'a, T: Iterator<Item = &'a u8>> JsonLoader<'a, T> {
             Some(&0x5b) => self.get_array(),
             // object
             Some(&0x7b) => self.get_object(),
-            _ => Err(Error::new("expect value, found no data")),
+            _ => Err(Error::new_parse_err("expect value, found no data")),
         }
     }
 }
