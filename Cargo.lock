@@ -4,14 +4,14 @@ version = 3
 
 [[package]]
 name = "dade"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "dade_derive",
 ]
 
 [[package]]
 name = "dade_derive"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "proc-macro2",
  "quote",

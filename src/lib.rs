@@ -159,6 +159,9 @@ pub use crate::load::JsonLoader;
 mod schema;
 pub use crate::schema::RegisterSchema;
 
+mod stream;
+pub use crate::stream::{SliceBytes, StrStream, Stream};
+
 /// A trait for converting string to titlecased.
 pub trait ToTitle {
     /// Returns a titlecased string.
@@ -227,6 +230,12 @@ pub trait Model {
     fn parse(json: &str) -> Result<Self>
     where
         Self: Sized;
+    /// Convert bytes to a struct that implemented this trait.
+    /// If the JSON string is invalid, the return is Err.
+    /// Also, if valid, the return is Ok that contains an instance.
+    fn parse_bytes(bytes: &[u8]) -> Result<Self>
+    where
+        Self: Sized;
     /// Dump a JSON string from the instance.
     fn json(&self, ensure_ascii: bool) -> String;
     /// Export a JSON Schema with a model.
@@ -235,7 +244,10 @@ pub trait Model {
 
 impl<T: ToJsonValue + FromJsonValue + RegisterSchema> Model for T {
     fn parse(json: &str) -> Result<Self> {
-        FromJsonValue::from_json_value(&json_load(json)?)
+        FromJsonValue::from_json_value(&JsonLoader::from(json).load()?)
+    }
+    fn parse_bytes(bytes: &[u8]) -> Result<Self> {
+        FromJsonValue::from_json_value(&JsonLoader::from(bytes).load()?)
     }
     fn json(&self, ensure_ascii: bool) -> String {
         json_dump(&ToJsonValue::to_json_value(self), ensure_ascii)
