@@ -162,6 +162,9 @@ pub use crate::schema::RegisterSchema;
 mod stream;
 pub use crate::stream::{SliceBytes, StrStream, Stream};
 
+#[cfg(feature = "de")]
+pub mod de;
+
 /// A trait for converting string to titlecased.
 pub trait ToTitle {
     /// Returns a titlecased string.

@@ -12,10 +12,14 @@ categories = ["data-structures", "encoding"]
 
 [dependencies]
 dade_derive = { version="0.1.4", path = "./dade_derive" }
+serde = { version = "1.0.136", optional=true }
+
+[features]
+de = ["serde"]
+
+[dev-dependencies]
 
 [workspace]
 members = [
     "dade_derive",
 ]
-
-[dev-dependencies]
