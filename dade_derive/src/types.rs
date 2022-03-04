@@ -1,6 +1,6 @@
 use proc_macro2::TokenStream;
 use quote::{quote, ToTokens};
-use syn::{DataStruct, Fields, GenericArgument, Ident, PathArguments, Type, Visibility};
+use syn::{DataEnum, DataStruct, Fields, GenericArgument, Ident, PathArguments, Type, Visibility};
 
 use crate::fields::ModelField;
 use crate::terms::{Condition, DefaultTerm, ToSchema, ToToken};
@@ -706,5 +706,164 @@ pub(crate) fn handle_struct(ident: Ident, vis: Visibility, data: DataStruct) -> 
             }
         }
         _ => panic!("Only support named field."),
+    }
+}
+
+pub(crate) fn handle_enum(ident: Ident, vis: Visibility, data: DataEnum) -> TokenStream {
+    let mut fields = Vec::new();
+    let mut to_jsons = Vec::new();
+    let mut statements = Vec::new();
+    let mut schemas = Vec::new();
+    for variant in data.variants {
+        let variant_ident = variant.ident;
+        match variant.fields {
+            Fields::Named(field) => {
+                let mut fds = Vec::new();
+                let mut maps = Vec::new();
+                let mut idents = Vec::new();
+                let mut conds = Vec::new();
+                let mut terms = Vec::new();
+                let mut properties = Vec::new();
+                let mut required = Vec::new();
+                for fd in field.named {
+                    let fd_ident = fd.ident.unwrap();
+                    let fd_name = format!("{}", fd_ident);
+                    let fd_type = fd.ty;
+                    fds.push(quote! { #fd_ident:#fd_type });
+                    idents.push(quote! { #fd_ident });
+                    maps.push(quote! {
+                        (#fd_name.to_string(), dade::ToJsonValue::to_json_value(#fd_ident))
+                    });
+                    conds.push(quote! { val.contains_key(#fd_name) });
+                    terms.push(quote! { #fd_ident: dade::FromJsonValue::from_json_value(val.get(#fd_name).unwrap())? });
+                    properties.push(quote! {
+                        (#fd_name.to_string(), <#fd_type as dade::RegisterSchema>::register_schema(defs))
+                    });
+                    if !format!("{}", quote! { #fd_type }).starts_with("Optional") {
+                        required.push(quote! {
+                            dade::JsonValue::String(#fd_name.to_string())
+                        })
+                    }
+                }
+                fields.push(quote! { #variant_ident { #(#fds),* } });
+                to_jsons.push(quote! {
+                    #ident::#variant_ident{ #(#idents),* } => dade::JsonValue::Object(std::collections::BTreeMap::from([#(#maps),*]))
+                });
+                statements.push(quote! {
+                    if let dade::JsonValue::Object(val) = value {
+                        if #(#conds)&&* {
+                            return Ok(#ident::#variant_ident { #(#terms),* });
+                        }
+                    }
+                });
+                let title = format!("{}::{}", ident, variant_ident);
+                schemas.push(quote! {
+                    dade::JsonValue::Object(std::collections::BTreeMap::from([
+                        (
+                            "title".to_string(),
+                            dade::JsonValue::String(#title.to_string()),
+                        ),
+                        (
+                            "type".to_string(),
+                            dade::JsonValue::String("object".to_string()),
+                        ),
+                        (
+                            "properties".to_string(),
+                            dade::JsonValue::Object(std::collections::BTreeMap::from([ #(#properties),* ])),
+                        ),
+                        (
+                            "required".to_string(),
+                            dade::JsonValue::Array(Vec::from([ #(#required),* ])),
+                        ),
+                    ]))
+                });
+            }
+            Fields::Unnamed(field) => {
+                if field.unnamed.len() > 1 {
+                    panic!("Only support one type")
+                }
+                let ty = &field.unnamed.first().unwrap().ty;
+                fields.push(quote! { #variant_ident(#ty) });
+                to_jsons.push(quote! {
+                    #ident::#variant_ident(val) => dade::ToJsonValue::to_json_value(val)
+                });
+                statements.push(quote! {
+                    match dade::FromJsonValue::from_json_value(value) {
+                        Ok(val) => return Ok(#ident::#variant_ident(val)),
+                        Err(err) => {
+                            match err.err_type() {
+                                dade::ErrorType::ParseError => {}
+                                dade::ErrorType::ValidateError => return Err(err)
+                            }
+                        }
+                    }
+                });
+                schemas.push(quote! {
+                    <#ty as dade::RegisterSchema>::register_schema(defs)
+                });
+            }
+            Fields::Unit => {
+                fields.push(quote! { #variant_ident });
+                // TODO; handle for expected value.
+                let cond = format!("{}", variant_ident);
+                to_jsons.push(quote! {
+                        #ident::#variant_ident => dade::JsonValue::String(#cond.to_string())
+                });
+                statements.push(quote! {
+                    if let dade::JsonValue::String(val) = value {
+                        if val == #cond { return Ok(#ident::#variant_ident); }
+                    }
+                });
+                schemas.push(quote! {
+                    dade::JsonValue::Object(std::collections::BTreeMap::from([(
+                        "const".to_string(),
+                        dade::JsonValue::String(#cond.to_string()),
+                    )]))
+                });
+            }
+        };
+    }
+    let data_type = data.enum_token;
+    let name = format!("{}", ident);
+    let def_name = format!("#/definitions/{}", ident);
+    quote! {
+        #vis #data_type #ident { #(#fields),* }
+        impl dade::ToJsonValue for #ident {
+            fn to_json_value(&self) -> dade::JsonValue {
+                match self { #(#to_jsons),* }
+            }
+        }
+        impl dade::FromJsonValue for #ident {
+            fn from_json_value(value: &dade::JsonValue) -> dade::Result<Self> {
+                #(#statements)*
+                Err(dade::Error::new_parse_err("No value with expected"))
+            }
+        }
+        impl dade::RegisterSchema for #ident {
+            fn register_schema(defs: &mut std::collections::BTreeMap<String, dade::JsonValue>) -> dade::JsonValue {
+                if !defs.contains_key(&#name.to_string()) {
+                    // Insert temporarily value.
+                    defs.insert(#name.to_string(), dade::JsonValue::Null);
+                    let json_value = dade::JsonValue::Array(Vec::from([ #(#schemas),*]));
+                    // Swap to proper value.
+                    defs.insert(
+                        #name.to_string(),
+                        dade::JsonValue::Object(std::collections::BTreeMap::from([
+                            (
+                                "title".to_string(),
+                                dade::JsonValue::String(#name.to_string()),
+                            ),
+                            ("anyOf".to_string(), json_value),
+                        ])),
+                    );
+
+                }
+                dade::JsonValue::Object(std::collections::BTreeMap::from([(
+                    "$ref".to_string(),
+                    dade::JsonValue::String(#def_name.to_string()),
+                )]))
+
+            }
+        }
     }
 }
