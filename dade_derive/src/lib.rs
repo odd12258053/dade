@@ -40,5 +40,6 @@ pub fn model(
         Data::Enum(data) => handle_enum(input.ident, input.vis, data),
         _ => panic!("Only support struct."),
     };
+    println!("{}", tokens);
     proc_macro::TokenStream::from(tokens)
 }

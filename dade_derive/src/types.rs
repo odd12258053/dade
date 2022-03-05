@@ -1,6 +1,9 @@
 use proc_macro2::TokenStream;
-use quote::{quote, ToTokens};
-use syn::{DataEnum, DataStruct, Fields, GenericArgument, Ident, PathArguments, Type, Visibility};
+use quote::{format_ident, quote, ToTokens};
+use syn::{
+    Attribute, DataEnum, DataStruct, Fields, GenericArgument, Ident, PathArguments, Type,
+    Visibility,
+};
 
 use crate::fields::ModelField;
 use crate::terms::{Condition, DefaultTerm, ToSchema, ToToken};
@@ -510,6 +513,22 @@ fn handle_object_type(
     }
 }
 
+fn parse_attrs(attrs: &[Attribute]) -> (TokenStream, ModelField) {
+    let mut bag = Vec::new();
+    let mut model_field = ModelField::default();
+    for attr in attrs.iter() {
+        match attr.path.get_ident() {
+            Some(ident) if ident == "field" => {
+                if !attr.tokens.is_empty() {
+                    model_field = attr.parse_args().unwrap();
+                }
+            }
+            _ => bag.push(attr),
+        }
+    }
+    (quote! {#(#bag)*}, model_field)
+}
+
 pub(crate) fn handle_struct(ident: Ident, vis: Visibility, data: DataStruct) -> TokenStream {
     match data.fields {
         Fields::Named(fields_named) => {
@@ -521,20 +540,7 @@ pub(crate) fn handle_struct(ident: Ident, vis: Visibility, data: DataStruct) -> 
             let mut required = Vec::new();
 
             for field in fields_named.named.iter() {
-                let (attrs, model_field) = {
-                    let mut bag = Vec::new();
-                    let mut model_field = ModelField::default();
-                    for attr in field.attrs.iter() {
-                        if attr.path.get_ident().unwrap() == "field" {
-                            if !attr.tokens.is_empty() {
-                                model_field = attr.parse_args().unwrap();
-                            }
-                        } else {
-                            bag.push(attr)
-                        }
-                    }
-                    (quote! {#(#bag)*}, model_field)
-                };
+                let (attrs, model_field) = parse_attrs(&field.attrs);
                 let variable: &Ident = field.ident.as_ref().unwrap();
                 let variable_vis = &field.vis;
                 let variable_key = if let Some(alias) = &model_field.alias {
@@ -716,8 +722,14 @@ pub(crate) fn handle_enum(ident: Ident, vis: Visibility, data: DataEnum) -> Toke
     let mut schemas = Vec::new();
     for variant in data.variants {
         let variant_ident = variant.ident;
+        let (attrs, model_field) = parse_attrs(&variant.attrs);
+
         match variant.fields {
             Fields::Named(field) => {
+                if model_field.expected.is_some() {
+                    panic!("Support only the expected term on the unit field.")
+                }
+
                 let mut fds = Vec::new();
                 let mut maps = Vec::new();
                 let mut idents = Vec::new();
@@ -726,10 +738,12 @@ pub(crate) fn handle_enum(ident: Ident, vis: Visibility, data: DataEnum) -> Toke
                 let mut properties = Vec::new();
                 let mut required = Vec::new();
                 for fd in field.named {
+                    let (fd_attrs, fd_model_field) = parse_attrs(&fd.attrs);
                     let fd_ident = fd.ident.unwrap();
                     let fd_name = format!("{}", fd_ident);
                     let fd_type = fd.ty;
-                    fds.push(quote! { #fd_ident:#fd_type });
+                    let model_type = ModelType::new(&fd_type);
+                    fds.push(quote! { #fd_attrs #fd_ident:#fd_type });
                     idents.push(quote! { #fd_ident });
                     maps.push(quote! {
                         (#fd_name.to_string(), dade::ToJsonValue::to_json_value(#fd_ident))
@@ -739,13 +753,13 @@ pub(crate) fn handle_enum(ident: Ident, vis: Visibility, data: DataEnum) -> Toke
                     properties.push(quote! {
                         (#fd_name.to_string(), <#fd_type as dade::RegisterSchema>::register_schema(defs))
                     });
-                    if !format!("{}", quote! { #fd_type }).starts_with("Optional") {
+                    if !matches!(model_type, ModelType::Optional(_)) {
                         required.push(quote! {
                             dade::JsonValue::String(#fd_name.to_string())
                         })
                     }
                 }
-                fields.push(quote! { #variant_ident { #(#fds),* } });
+                fields.push(quote! { #attrs #variant_ident { #(#fds),* } });
                 to_jsons.push(quote! {
                     #ident::#variant_ident{ #(#idents),* } => dade::JsonValue::Object(std::collections::BTreeMap::from([#(#maps),*]))
                 });
@@ -779,33 +793,79 @@ pub(crate) fn handle_enum(ident: Ident, vis: Visibility, data: DataEnum) -> Toke
                 });
             }
             Fields::Unnamed(field) => {
-                if field.unnamed.len() > 1 {
-                    panic!("Only support one type")
+                if model_field.expected.is_some() {
+                    panic!("Support only the expected term on the unit field.")
                 }
-                let ty = &field.unnamed.first().unwrap().ty;
-                fields.push(quote! { #variant_ident(#ty) });
-                to_jsons.push(quote! {
-                    #ident::#variant_ident(val) => dade::ToJsonValue::to_json_value(val)
-                });
-                statements.push(quote! {
-                    match dade::FromJsonValue::from_json_value(value) {
-                        Ok(val) => return Ok(#ident::#variant_ident(val)),
-                        Err(err) => {
-                            match err.err_type() {
-                                dade::ErrorType::ParseError => {}
-                                dade::ErrorType::ValidateError => return Err(err)
+                if field.unnamed.len() == 1 {
+                    let fd = field.unnamed.first().unwrap();
+                    let ty = &fd.ty;
+                    let (fd_attrs, fd_model_field) = parse_attrs(&fd.attrs);
+                    fields.push(quote! { #attrs #variant_ident( #fd_attrs #ty) });
+                    to_jsons.push(quote! {
+                        #ident::#variant_ident(val) => dade::ToJsonValue::to_json_value(val)
+                    });
+                    statements.push(quote! {
+                        match dade::FromJsonValue::from_json_value(value) {
+                            Ok(val) => return Ok(#ident::#variant_ident(val)),
+                            Err(err) => {
+                                match err.err_type() {
+                                    dade::ErrorType::ParseError => {}
+                                    dade::ErrorType::ValidateError => return Err(err)
+                                }
                             }
                         }
+                    });
+                    schemas.push(quote! {
+                        <#ty as dade::RegisterSchema>::register_schema(defs)
+                    });
+                } else {
+                    let mut types = Vec::new();
+                    let mut keys = Vec::new();
+                    let mut indices = Vec::new();
+                    let mut fd_schemas = Vec::new();
+                    let length = field.unnamed.len();
+                    for (idx, fd) in field.unnamed.iter().enumerate() {
+                        let (fd_attrs, fd_model_field) = parse_attrs(&fd.attrs);
+                        let ty = &fd.ty;
+                        types.push(quote! { #fd_attrs #ty });
+                        keys.push(format_ident!("val{}", idx));
+                        indices.push(quote!({ #idx }));
+                        fd_schemas.push(quote!({
+                            <#ty as dade::RegisterSchema>::register_schema(defs)
+                        }));
                     }
-                });
-                schemas.push(quote! {
-                    <#ty as dade::RegisterSchema>::register_schema(defs)
-                });
+                    fields.push(quote! { #attrs #variant_ident( #(#types),* ) });
+                    to_jsons.push(quote! {
+                        #ident::#variant_ident(#(#keys),*) => {
+                            dade::JsonValue::Array(Vec::from([#(dade::ToJsonValue::to_json_value(#keys)),*]))
+                        }
+                    });
+                    statements.push(quote! {
+                        if let dade::JsonValue::Array(val) = value {
+                            if val.len() == #length {
+                                return Ok(#ident::#variant_ident( #(dade::FromJsonValue::from_json_value(&val[#indices])?),* ));
+                            }
+                        }
+                    });
+                    // <#ty as dade::RegisterSchema>::register_schema(defs)
+                    schemas.push(quote! {
+                        dade::JsonValue::Object(std::collections::BTreeMap::from([
+                            ("type".to_string(), dade::JsonValue::String("array".to_string())),
+                            ("items".to_string(), dade::JsonValue::Bool(false)),
+                            ("prefixItems".to_string(), dade::JsonValue::Array(Vec::from([
+                                #(#fd_schemas),*
+                            ]))),
+                        ]))
+                    });
+                }
             }
             Fields::Unit => {
-                fields.push(quote! { #variant_ident });
-                // TODO; handle for expected value.
-                let cond = format!("{}", variant_ident);
+                fields.push(quote! { #attrs #variant_ident });
+                let cond = if let Some(expected) = model_field.expected {
+                    format!("{}", expected.value.value())
+                } else {
+                    format!("{}", variant_ident)
+                };
                 to_jsons.push(quote! {
                         #ident::#variant_ident => dade::JsonValue::String(#cond.to_string())
                 });

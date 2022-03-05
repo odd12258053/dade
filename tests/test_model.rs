@@ -1,34 +1,34 @@
 use dade::{model, Model};
 
-fn test(a: usize) -> dade::Result<usize> {
-    Ok(a)
-}
-
-#[model]
-struct Bar {
-    w1: isize,
-}
-
-#[model]
-struct Foo {
-    // comments
-    #[doc = r" Single line doc comments"]
-    #[field(le = 1000.0, gt = 0.0)]
-    v1: f32,
-    #[field(ge= 1, validate= test, default= 10)]
-    v2: usize,
-    #[field(min_length = 1, default = "abc")]
-    v3: String,
-    #[field()]
-    v4: Option<bool>,
-    #[field(alias = "bar")]
-    v5: Bar,
-    #[field]
-    v6: (),
-}
-
 #[test]
 fn test_model() {
+    fn validate(a: usize) -> dade::Result<usize> {
+        Ok(a)
+    }
+
+    #[model]
+    struct Bar {
+        w1: isize,
+    }
+
+    #[model]
+    struct Foo {
+        // comments
+        #[doc = r" Single line doc comments"]
+        #[field(le = 1000.0, gt = 0.0)]
+        v1: f32,
+        #[field(ge= 1, validate= validate, default= 10)]
+        v2: usize,
+        #[field(min_length = 1, default = "abc")]
+        v3: String,
+        #[field()]
+        v4: Option<bool>,
+        #[field(alias = "bar")]
+        v5: Bar,
+        #[field]
+        v6: (),
+    }
+
     let json = "{\"v1\": 2.2,\"v4\": true, \"bar\": {\"w1\": 10}}";
 
     let ret = Foo::parse(json);
@@ -47,16 +47,16 @@ fn test_model() {
     );
 }
 
-#[model]
-struct Nested {
-    #[field]
-    id: u32,
-    #[field]
-    child: Option<Box<Nested>>,
-}
-
 #[test]
 fn test_nested_model() {
+    #[model]
+    struct Nested {
+        #[field]
+        id: u32,
+        #[field]
+        child: Option<Box<Nested>>,
+    }
+
     let json = "{\"id\": 1}";
     let ret = Nested::parse(json);
     assert!(ret.is_ok(), "{}", ret.err().unwrap().to_string());
@@ -84,14 +84,14 @@ fn test_nested_model() {
     );
 }
 
-#[model]
-struct Simple {
-    id: u32,
-    key: String,
-}
-
 #[test]
 fn test_simple_model() {
+    #[model]
+    struct Simple {
+        id: u32,
+        key: String,
+    }
+
     let json = "{\"id\": 1,\"key\": \"value\"}";
     let ret = Simple::parse(json);
     assert!(ret.is_ok(), "{}", ret.err().unwrap().to_string());
