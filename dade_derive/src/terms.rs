@@ -3,8 +3,8 @@ use quote::quote;
 use syn::parse::{Parse, ParseStream};
 use syn::{Ident, Lit, LitFloat, LitInt, LitStr, Token};
 
-pub(crate) trait ToToken {
-    fn to_token(&self, variable: &Ident) -> TokenStream;
+pub(crate) trait ToValidateToken {
+    fn to_validate_token(&self, variable: &Ident) -> TokenStream;
 }
 
 pub(crate) trait ToSchema {
@@ -15,10 +15,22 @@ pub(crate) struct MinLengthTerm {
     pub value: LitInt,
 }
 
-impl ToToken for MinLengthTerm {
-    fn to_token(&self, variable: &Ident) -> TokenStream {
+impl ToValidateToken for MinLengthTerm {
+    fn to_validate_token(&self, variable: &Ident) -> TokenStream {
         let val = &self.value;
-        quote! { #variable.len() >= #val }
+        let msg = format!(
+            "the length of {} must be equal to or greater than {}",
+            variable, val
+        );
+        quote! {
+            | value | {
+                if value.len() >= #val {
+                    Ok(value)
+                } else {
+                    Err(dade::Error::new_validate_err(#msg))
+                }
+            }
+        }
     }
 }
 
@@ -36,10 +48,22 @@ pub(crate) struct MaxLengthTerm {
     pub value: LitInt,
 }
 
-impl ToToken for MaxLengthTerm {
-    fn to_token(&self, variable: &Ident) -> TokenStream {
+impl ToValidateToken for MaxLengthTerm {
+    fn to_validate_token(&self, variable: &Ident) -> TokenStream {
         let val = &self.value;
-        quote! { #variable.len() <= #val }
+        let msg = format!(
+            "the length of {} must be equal to or less than {}",
+            variable, val
+        );
+        quote! {
+            | value | {
+                if value.len() <= #val {
+                    Ok(value)
+                } else {
+                    Err(dade::Error::new_validate_err(#msg))
+                }
+            }
+        }
     }
 }
 
@@ -57,10 +81,22 @@ pub(crate) struct MinItemsTerm {
     pub value: LitInt,
 }
 
-impl ToToken for MinItemsTerm {
-    fn to_token(&self, variable: &Ident) -> TokenStream {
+impl ToValidateToken for MinItemsTerm {
+    fn to_validate_token(&self, variable: &Ident) -> TokenStream {
         let val = &self.value;
-        quote! { #variable.len() >= #val }
+        let msg = format!(
+            "the number of items in {} must be equal to or greater than {}",
+            variable, val
+        );
+        quote! {
+            | value | {
+                if value.len() >= #val {
+                    Ok(value)
+                } else {
+                    Err(dade::Error::new_validate_err(#msg))
+                }
+            }
+        }
     }
 }
 
@@ -78,10 +114,22 @@ pub(crate) struct MaxItemsTerm {
     pub value: LitInt,
 }
 
-impl ToToken for MaxItemsTerm {
-    fn to_token(&self, variable: &Ident) -> TokenStream {
+impl ToValidateToken for MaxItemsTerm {
+    fn to_validate_token(&self, variable: &Ident) -> TokenStream {
         let val = &self.value;
-        quote! { #variable.len() <= #val }
+        let msg = format!(
+            "the number of items in {} must be equal to or less than {}",
+            variable, val
+        );
+        quote! {
+            | value | {
+                if value.len() <= #val {
+                    Ok(value)
+                } else {
+                    Err(dade::Error::new_validate_err(#msg))
+                }
+            }
+        }
     }
 }
 impl ToSchema for MaxItemsTerm {
@@ -132,10 +180,19 @@ pub(crate) struct GtTerm {
     pub value: LitNumber,
 }
 
-impl ToToken for GtTerm {
-    fn to_token(&self, variable: &Ident) -> TokenStream {
+impl ToValidateToken for GtTerm {
+    fn to_validate_token(&self, variable: &Ident) -> TokenStream {
         let val = &self.value;
-        quote! { #variable > #val }
+        let msg = format!("{} must be greater than {}", variable, val.to_string());
+        quote! {
+            | value | {
+                if value > #val {
+                    Ok(value)
+                } else {
+                    Err(dade::Error::new_validate_err(#msg))
+                }
+            }
+        }
     }
 }
 
@@ -153,10 +210,23 @@ pub(crate) struct GeTerm {
     pub value: LitNumber,
 }
 
-impl ToToken for GeTerm {
-    fn to_token(&self, variable: &Ident) -> TokenStream {
+impl ToValidateToken for GeTerm {
+    fn to_validate_token(&self, variable: &Ident) -> TokenStream {
         let val = &self.value;
-        quote! { #variable >= #val }
+        let msg = format!(
+            "{} must be equal to or greater than {}",
+            variable,
+            val.to_string()
+        );
+        quote! {
+            | value | {
+                if value >= #val {
+                    Ok(value)
+                } else {
+                    Err(dade::Error::new_validate_err(#msg))
+                }
+            }
+        }
     }
 }
 
@@ -174,10 +244,19 @@ pub(crate) struct LtTerm {
     pub value: LitNumber,
 }
 
-impl ToToken for LtTerm {
-    fn to_token(&self, variable: &Ident) -> TokenStream {
+impl ToValidateToken for LtTerm {
+    fn to_validate_token(&self, variable: &Ident) -> TokenStream {
         let val = &self.value;
-        quote! { #variable < #val }
+        let msg = format!("{} must be less than {}", variable, val.to_string());
+        quote! {
+            | value | {
+                if value < #val {
+                    Ok(value)
+                } else {
+                    Err(dade::Error::new_validate_err(#msg))
+                }
+            }
+        }
     }
 }
 
@@ -195,10 +274,23 @@ pub(crate) struct LeTerm {
     pub value: LitNumber,
 }
 
-impl LeTerm {
-    pub fn to_token(&self, variable: &Ident) -> TokenStream {
+impl ToValidateToken for LeTerm {
+    fn to_validate_token(&self, variable: &Ident) -> TokenStream {
         let val = &self.value;
-        quote! { #variable <= #val }
+        let msg = format!(
+            "{} must be equal to or less than {}",
+            variable,
+            val.to_string()
+        );
+        quote! {
+            | value | {
+                if value <= #val {
+                    Ok(value)
+                } else {
+                    Err(dade::Error::new_validate_err(#msg))
+                }
+            }
+        }
     }
 }
 
