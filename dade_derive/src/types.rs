@@ -6,7 +6,7 @@ use syn::{
 };
 
 use crate::fields::ModelField;
-use crate::terms::{Condition, DefaultTerm, ToSchema, ToToken};
+use crate::terms::{Condition, DefaultTerm, ToSchema, ToValidateToken};
 
 enum ModelType {
     Null,
@@ -79,6 +79,12 @@ impl ModelType {
     }
 }
 
+fn make_null_condition(model_field: &ModelField) {
+    if !model_field.conditions.is_empty() {
+        panic!("Support condition is alias, default and validate")
+    }
+}
+
 fn handle_null_type(
     model_field: &ModelField,
     variable: &Ident,
@@ -87,18 +93,18 @@ fn handle_null_type(
     statements: &mut Vec<TokenStream>,
     conds: &mut Vec<TokenStream>,
 ) {
-    let default_val = if let Some(DefaultTerm::Ident(term)) = &model_field.default {
-        let val = &term.value;
-        if val == "null" {
-            conds.push(quote! {
-                "default".to_string(), dade::JsonValue::Null
-            });
-            quote! { () }
-        } else {
-            panic!("Support default condition is only `null`")
+    make_null_condition(model_field);
+    let default_val = match &model_field.default {
+        Some(DefaultTerm::Ident(term)) => {
+            if &term.value == "null" {
+                conds.push(quote! { "default".to_string(), dade::JsonValue::Null });
+                quote! { () }
+            } else {
+                panic!("Support default condition is only `null`")
+            }
         }
-    } else {
-        quote! { () }
+        Some(DefaultTerm::Lit(_)) => panic!("Support default condition is only `null`"),
+        None => quote! { () },
     };
     statements.push(quote! {
         let #variable: #variable_type = match dict.get(#variable_key) {
@@ -106,8 +112,36 @@ fn handle_null_type(
             None => #default_val,
         };
     });
-    if !model_field.conditions.is_empty() {
-        panic!("Support condition is alias, default and validate")
+}
+
+fn make_number_condition(
+    variable: &Ident,
+    model_field: &ModelField,
+    stmt: &mut Vec<TokenStream>,
+    conds: &mut Vec<TokenStream>,
+) {
+    for cond in model_field.conditions.iter() {
+        match cond {
+            Condition::Gt(term) => {
+                stmt.push(term.to_validate_token(variable));
+                conds.push(term.to_schema());
+            }
+            Condition::Ge(term) => {
+                stmt.push(term.to_validate_token(variable));
+                conds.push(term.to_schema());
+            }
+            Condition::Lt(term) => {
+                stmt.push(term.to_validate_token(variable));
+                conds.push(term.to_schema());
+            }
+            Condition::Le(term) => {
+                stmt.push(term.to_validate_token(variable));
+                conds.push(term.to_schema());
+            }
+            _ => {
+                panic!("Support condition is gt, ge, lt, le, alias, default and validate")
+            }
+        }
     }
 }
 
@@ -119,61 +153,54 @@ fn handle_number_type(
     statements: &mut Vec<TokenStream>,
     conds: &mut Vec<TokenStream>,
 ) {
-    let default_val = if let Some(DefaultTerm::Lit(term)) = &model_field.default {
-        let val = &term.value;
-        conds.push(quote! {
-            "default".to_string(), dade::JsonValue::Number(dade::Number::from(#val))
-        });
-        quote! { #val }
-    } else {
-        let msg = format!("not found key, {}", variable_key);
-        quote! {
-            return Err(dade::Error::new_validate_err(#msg))
+    let mut stmt = Vec::new();
+    make_number_condition(variable, model_field, &mut stmt, conds);
+    if let Some(term) = &model_field.validate {
+        let fn_name = &term.value;
+        stmt.push(quote! { #fn_name });
+    }
+    let default_val = match &model_field.default {
+        Some(DefaultTerm::Ident(_)) => {
+            panic!("Support default condition is only numeric")
+        }
+        Some(DefaultTerm::Lit(term)) => {
+            let val = &term.value;
+            conds.push(
+                quote! { "default".to_string(), dade::JsonValue::Number(dade::Number::from(#val)) },
+            );
+            quote! { Ok(#val) }
+        }
+        None => {
+            let msg = format!("not found key, {}", variable_key);
+            quote! { Err(dade::Error::new_validate_err(#msg)) }
         }
     };
     statements.push(quote! {
-        // TODO: set a correct error.
-        let #variable: #variable_type = match dict.get(#variable_key) {
-            Some(val) => dade::FromJsonValue::from_json_value(val)?,
+        let #variable: #variable_type = (match dict.get(#variable_key) {
+            Some(val) => dade::FromJsonValue::from_json_value(val),
             None => #default_val,
-        };
+        }) #(.and_then(#stmt))*?;
     });
-    let mut terms = Vec::new();
+}
+
+fn make_string_condition(
+    variable: &Ident,
+    model_field: &ModelField,
+    stmt: &mut Vec<TokenStream>,
+    conds: &mut Vec<TokenStream>,
+) {
     for cond in model_field.conditions.iter() {
         match cond {
-            Condition::Gt(term) => {
-                terms.push(term.to_token(variable));
+            Condition::MinLength(term) => {
+                stmt.push(term.to_validate_token(variable));
                 conds.push(term.to_schema());
             }
-            Condition::Ge(term) => {
-                terms.push(term.to_token(variable));
+            Condition::MaxLength(term) => {
+                stmt.push(term.to_validate_token(variable));
                 conds.push(term.to_schema());
             }
-            Condition::Lt(term) => {
-                terms.push(term.to_token(variable));
-                conds.push(term.to_schema());
-            }
-            Condition::Le(term) => {
-                terms.push(term.to_token(variable));
-                conds.push(term.to_schema());
-            }
-            _ => {
-                panic!("Support condition is gt, ge, lt, le, alias, default and validate")
-            }
+            _ => panic!("Support condition is min_length, max_length, alias, default and validate"),
         }
-    }
-    if !terms.is_empty() {
-        statements.push(quote! {
-            if !( #(#terms)&&* ) {
-                return Err(dade::Error::new_validate_err("invalid number"))
-            }
-        })
-    }
-    if let Some(term) = &model_field.validate {
-        let fn_name = &term.value;
-        statements.push(quote! {
-            let #variable: #variable_type = #fn_name(#variable)?;
-        });
     }
 }
 
@@ -185,51 +212,37 @@ fn handle_string_type(
     statements: &mut Vec<TokenStream>,
     conds: &mut Vec<TokenStream>,
 ) {
-    let default_val = if let Some(DefaultTerm::Lit(term)) = &model_field.default {
-        let val = &term.value;
-        conds.push(quote! {
-            "default".to_string(), dade::JsonValue::String(#val.to_string())
-        });
-        quote! { #val.to_string() }
-    } else {
-        let msg = format!("not found key, {}", variable_key);
-        quote! {
-            return Err(dade::Error::new_validate_err(#msg))
+    let mut stmt = Vec::new();
+    make_string_condition(variable, model_field, &mut stmt, conds);
+    if let Some(term) = &model_field.validate {
+        let fn_name = &term.value;
+        stmt.push(quote! { #fn_name });
+    }
+    let default_val = match &model_field.default {
+        Some(DefaultTerm::Ident(_)) => {
+            panic!("Support default condition is only string")
+        }
+        Some(DefaultTerm::Lit(term)) => {
+            let val = &term.value;
+            conds.push(quote! { "default".to_string(), dade::JsonValue::String(#val.to_string()) });
+            quote! { Ok(#val.to_string()) }
+        }
+        None => {
+            let msg = format!("not found key, {}", variable_key);
+            quote! { Err(dade::Error::new_validate_err(#msg)) }
         }
     };
     statements.push(quote! {
-        let #variable: #variable_type = match dict.get(#variable_key) {
-            Some(val) => dade::FromJsonValue::from_json_value(val)?,
+        let #variable: #variable_type = (match dict.get(#variable_key) {
+            Some(val) => dade::FromJsonValue::from_json_value(val),
             None => #default_val,
-        };
+        }) #(.and_then(#stmt))*?;
     });
+}
 
-    let mut terms = Vec::new();
-    for cond in model_field.conditions.iter() {
-        match cond {
-            Condition::MinLength(term) => {
-                terms.push(term.to_token(variable));
-                conds.push(term.to_schema());
-            }
-            Condition::MaxLength(term) => {
-                terms.push(term.to_token(variable));
-                conds.push(term.to_schema());
-            }
-            _ => panic!("Support condition is min_length, max_length, alias, default and validate"),
-        }
-    }
-    if !terms.is_empty() {
-        statements.push(quote! {
-            if !( #(#terms)&&* ) {
-                return Err(dade::Error::new_validate_err("invalid string"))
-            }
-        });
-    }
-    if let Some(term) = &model_field.validate {
-        let fn_name = &term.value;
-        statements.push(quote! {
-            let #variable: #variable_type = #fn_name(#variable)?;
-        });
+fn make_bool_condition(model_field: &ModelField) {
+    if !model_field.conditions.is_empty() {
+        panic!("Support condition is alias, default and validate")
     }
 }
 
@@ -241,33 +254,32 @@ fn handle_bool_type(
     statements: &mut Vec<TokenStream>,
     conds: &mut Vec<TokenStream>,
 ) {
-    let default_val = if let Some(DefaultTerm::Lit(term)) = &model_field.default {
-        let val = &term.value;
-        conds.push(quote! {
-            "default".to_string(), dade::JsonValue::Bool(#val)
-        });
-        quote! { #val }
-    } else {
-        let msg = format!("not found key, {}", variable_key);
-        quote! {
-            return Err(dade::Error::new_validate_err(#msg))
+    make_bool_condition(model_field);
+    let default_val = match &model_field.default {
+        Some(DefaultTerm::Ident(_)) => {
+            panic!("Support default condition is only boolean")
+        }
+        Some(DefaultTerm::Lit(term)) => {
+            let val = &term.value;
+            conds.push(quote! { "default".to_string(), dade::JsonValue::Bool(#val) });
+            quote! { Ok(#val) }
+        }
+        None => {
+            let msg = format!("not found key, {}", variable_key);
+            quote! { Err(dade::Error::new_validate_err(#msg)) }
         }
     };
-    statements.push(quote! {
-        let #variable: #variable_type = match dict.get(#variable_key) {
-            Some(val) => dade::FromJsonValue::from_json_value(val)?,
-            None => #default_val,
-        };
-    });
-    if !model_field.conditions.is_empty() {
-        panic!("Support condition is alias, default and validate")
-    }
+    let mut stmt = Vec::new();
     if let Some(term) = &model_field.validate {
         let fn_name = &term.value;
-        statements.push(quote! {
-            let #variable: #variable_type = #fn_name(#variable)?;
-        });
+        stmt.push(quote! { #fn_name });
     }
+    statements.push(quote! {
+        let #variable: #variable_type = (match dict.get(#variable_key) {
+            Some(val) => dade::FromJsonValue::from_json_value(val),
+            None => #default_val,
+        }) #(.and_then(#stmt))*?;
+    });
 }
 
 fn handle_optional_type(
@@ -279,161 +291,111 @@ fn handle_optional_type(
     statements: &mut Vec<TokenStream>,
     conds: &mut Vec<TokenStream>,
 ) {
-    let default_val = if let Some(term) = &model_field.default {
-        match inner_type {
-            ModelType::Null => panic!("invalid type. You only use `()`."),
-            ModelType::Number => match term {
-                DefaultTerm::Ident(term) if term.value == "null" => {
-                    conds.push(quote! {
-                        "default".to_string(), dade::JsonValue::Null
-                    });
-                    quote! { None }
-                }
-                DefaultTerm::Lit(term) => {
-                    let val = &term.value;
-                    conds.push(quote! {
-                        "default".to_string(), dade::JsonValue::Number(dade::Number::from(#val))
-                    });
-                    quote! { #val }
-                }
-                _ => panic!("Support default condition is `null` or Number"),
-            },
-            ModelType::String => match term {
-                DefaultTerm::Ident(term) if term.value == "null" => {
-                    conds.push(quote! {
-                        "default".to_string(), dade::JsonValue::Null
-                    });
-                    quote! { None }
-                }
-                DefaultTerm::Lit(term) => {
-                    let val = &term.value;
-                    conds.push(quote! {
-                        "default".to_string(), dade::JsonValue::String(#val.to_string())
-                    });
-                    quote! { #val.to_string() }
-                }
-                _ => panic!("Support default condition is `null` or String"),
-            },
-            ModelType::Bool => match term {
-                DefaultTerm::Ident(term) if term.value == "null" => {
-                    conds.push(quote! {
-                        "default".to_string(), dade::JsonValue::Null
-                    });
-                    quote! { None }
-                }
-                DefaultTerm::Lit(term) => {
-                    let val = &term.value;
-                    conds.push(quote! {
-                        "default".to_string(), dade::JsonValue::Bool(#val)
-                    });
-                    quote! { #val }
-                }
-                _ => panic!("Support default condition is `null`, `false`, `true`"),
-            },
-            ModelType::Optional(_) => panic!("invalid type"),
+    let default_val = match &model_field.default {
+        Some(DefaultTerm::Ident(term)) => {
+            if term.value == "null" {
+                conds.push(quote! {
+                    "default".to_string(), dade::JsonValue::Null
+                });
+                quote! { None }
+            } else {
+                panic!("Support default condition is `null` or value for inner type.")
+            }
+        }
+        Some(DefaultTerm::Lit(term)) => match inner_type {
+            ModelType::Null => {
+                panic!("invalid type. You only use `()`.")
+            }
+            ModelType::Number => {
+                let val = &term.value;
+                conds.push(quote! {
+                    "default".to_string(), dade::JsonValue::Number(dade::Number::from(#val))
+                });
+                quote! { Some(#val) }
+            }
+            ModelType::String => {
+                let val = &term.value;
+                conds.push(quote! {
+                    "default".to_string(), dade::JsonValue::String(#val.to_string())
+                });
+                quote! { Some(#val.to_string()) }
+            }
+            ModelType::Bool => {
+                let val = &term.value;
+                conds.push(quote! {
+                    "default".to_string(), dade::JsonValue::Bool(#val)
+                });
+                quote! { Some(#val) }
+            }
+            ModelType::Optional(_) => {
+                panic!("invalid type. Don't support nested optional type.")
+            }
             ModelType::Array => {
                 panic!("Support default condition is only `null`")
             }
             ModelType::Object => {
                 panic!("Support default condition is only `null`")
             }
+        },
+        None => {
+            quote! { None }
         }
-    } else {
-        quote! { None }
     };
 
-    statements.push(quote! {
-        let #variable: #variable_type = match dict.get(#variable_key) {
-            Some(val) => dade::FromJsonValue::from_json_value(val)?,
-            None => #default_val,
-        };
-    });
+    let mut stmt = Vec::new();
     if !model_field.conditions.is_empty() {
-        let mut terms = Vec::new();
-        let inner_type_name = match inner_type {
-            ModelType::Number => {
-                for cond in model_field.conditions.iter() {
-                    match cond {
-                        Condition::Gt(term) => {
-                            terms.push(term.to_token(variable));
-                            conds.push(term.to_schema());
-                        }
-                        Condition::Ge(term) => {
-                            terms.push(term.to_token(variable));
-                            conds.push(term.to_schema());
-                        }
-                        Condition::Lt(term) => {
-                            terms.push(term.to_token(variable));
-                            conds.push(term.to_schema());
-                        }
-                        Condition::Le(term) => {
-                            terms.push(term.to_token(variable));
-                            conds.push(term.to_schema());
-                        }
-                        _ => {
-                            panic!(
-                                "Support condition is gt, ge, lt, le, alias, default and validate"
-                            )
-                        }
-                    }
-                }
-                "number"
-            }
-            ModelType::String => {
-                for cond in model_field.conditions.iter() {
-                    match cond {
-                        Condition::MinLength(term) => {
-                            terms.push(term.to_token(variable));
-                            conds.push(term.to_schema());
-                        },
-                        Condition::MaxLength(term) => {
-                            terms.push(term.to_token(variable));
-                            conds.push(term.to_schema());
-                        },
-                        _ => panic!("Support condition is min_length, max_length, alias, default and validate"),
-                    }
-                }
-                "string"
-            }
-            ModelType::Array => {
-                for cond in model_field.conditions.iter() {
-                    match cond {
-                        Condition::MinItems(term) => {
-                            terms.push(term.to_token(variable));
-                            conds.push(term.to_schema());
-                        }
-                        Condition::MaxItems(term) => {
-                            terms.push(term.to_token(variable));
-                            conds.push(term.to_schema());
-                        }
-                        _ => {
-                            panic!("Support condition is min_items, max_items, alias and validate")
-                        }
-                    }
-                }
-                "array"
-            }
-            _ => {
-                panic!("Support condition is alias, default and validate")
-            }
-        };
-        if !terms.is_empty() {
-            let err_msg = format!("invalid {}", inner_type_name);
-            statements.push(quote! {
-                if let Some(ref #variable) = #variable {
-                    if !( #(#terms)&&* ) {
-                        return Err(dade::Error::new_validate_err(#err_msg))
-                    }
-                }
-            });
+        match inner_type {
+            ModelType::Null => make_null_condition(model_field),
+            ModelType::Number => make_number_condition(variable, model_field, &mut stmt, conds),
+            ModelType::String => make_string_condition(variable, model_field, &mut stmt, conds),
+            ModelType::Bool => make_bool_condition(model_field),
+            ModelType::Optional(_) => panic!("Support condition is alias and validate"),
+            ModelType::Array => make_array_condition(variable, model_field, &mut stmt, conds),
+            ModelType::Object => make_object_condition(model_field),
         }
     }
 
+    let mut cstmt = Vec::new();
     if let Some(term) = &model_field.validate {
         let fn_name = &term.value;
-        statements.push(quote! {
-            let #variable: #variable_type = #fn_name(#variable)?;
-        });
+        cstmt.push(quote! { #fn_name });
+    }
+    statements.push(quote! {
+        let #variable: #variable_type = (match dict.get(#variable_key) {
+            Some(val) => dade::FromJsonValue::from_json_value(val),
+            None => Ok(#default_val),
+        }).and_then(|x| {
+            match x {
+                Some(y) => {
+                    match Ok(y) #(.and_then(#stmt))* {
+                        Ok(z) => Ok(Some(z)),
+                        Err(e) => Err(e)
+                    }
+                },
+                None => Ok(None),
+            }
+        }) #(.and_then(#cstmt))*?;
+    });
+}
+
+fn make_array_condition(
+    variable: &Ident,
+    model_field: &ModelField,
+    stmt: &mut Vec<TokenStream>,
+    conds: &mut Vec<TokenStream>,
+) {
+    for cond in model_field.conditions.iter() {
+        match cond {
+            Condition::MinItems(term) => {
+                stmt.push(term.to_validate_token(variable));
+                conds.push(term.to_schema());
+            }
+            Condition::MaxItems(term) => {
+                stmt.push(term.to_validate_token(variable));
+                conds.push(term.to_schema());
+            }
+            _ => panic!("Support condition is min_items, max_items, alias and validate"),
+        }
     }
 }
 
@@ -448,39 +410,24 @@ fn handle_array_type(
     if model_field.default.is_some() {
         panic!("Support condition is min_items, max_items, alias and validate")
     }
-    let msg = format!("not found key, {}", variable_key);
-    statements.push(quote! {
-        let #variable: #variable_type = match dict.get(#variable_key) {
-            Some(val) => dade::FromJsonValue::from_json_value(val)?,
-            None => return Err(dade::Error::new_validate_err(#msg)),
-        };
-    });
-    let mut terms = Vec::new();
-    for cond in model_field.conditions.iter() {
-        match cond {
-            Condition::MinItems(term) => {
-                terms.push(term.to_token(variable));
-                conds.push(term.to_schema());
-            }
-            Condition::MaxItems(term) => {
-                terms.push(term.to_token(variable));
-                conds.push(term.to_schema());
-            }
-            _ => panic!("Support condition is min_items, max_items, alias and validate"),
-        }
-    }
-    if !terms.is_empty() {
-        statements.push(quote! {
-            if !( #(#terms)&&* ) {
-                return Err(dade::Error::new_validate_err("invalid array"))
-            }
-        });
-    }
+    let mut stmt = Vec::new();
+    make_array_condition(variable, model_field, &mut stmt, conds);
     if let Some(term) = &model_field.validate {
         let fn_name = &term.value;
-        statements.push(quote! {
-            let #variable: #variable_type = #fn_name(#variable)?;
-        });
+        stmt.push(quote! { #fn_name });
+    }
+    let msg = format!("not found key, {}", variable_key);
+    statements.push(quote! {
+        let #variable: #variable_type = (match dict.get(#variable_key) {
+            Some(val) => dade::FromJsonValue::from_json_value(val),
+            None => Err(dade::Error::new_validate_err(#msg)),
+        }) #(.and_then(#stmt))*?;
+    });
+}
+
+fn make_object_condition(model_field: &ModelField) {
+    if !model_field.conditions.is_empty() {
+        panic!("Support condition is alias and validate")
     }
 }
 
@@ -495,22 +442,19 @@ fn handle_object_type(
     if model_field.default.is_some() {
         panic!("Support condition is alias and validate")
     }
-    let msg = format!("not found key, {}", variable_key);
-    statements.push(quote! {
-        let #variable: #variable_type = match dict.get(#variable_key) {
-            Some(val) => dade::FromJsonValue::from_json_value(val)?,
-            None => return Err(dade::Error::new_validate_err(#msg)),
-        };
-    });
-    if !model_field.conditions.is_empty() {
-        panic!("Support condition is alias, default and validate")
-    }
+    make_object_condition(model_field);
+    let mut stmt = Vec::new();
     if let Some(term) = &model_field.validate {
         let fn_name = &term.value;
-        statements.push(quote! {
-            let #variable: #variable_type = #fn_name(#variable)?;
-        });
+        stmt.push(quote! { #fn_name });
     }
+    let msg = format!("not found key, {}", variable_key);
+    statements.push(quote! {
+        let #variable: #variable_type = (match dict.get(#variable_key) {
+            Some(val) => dade::FromJsonValue::from_json_value(val),
+            None => Err(dade::Error::new_validate_err(#msg)),
+        }) #(.and_then(#stmt))*?;
+    });
 }
 
 fn parse_attrs(attrs: &[Attribute]) -> (TokenStream, ModelField) {
@@ -738,7 +682,8 @@ pub(crate) fn handle_enum(ident: Ident, vis: Visibility, data: DataEnum) -> Toke
                 let mut properties = Vec::new();
                 let mut required = Vec::new();
                 for fd in field.named {
-                    let (fd_attrs, fd_model_field) = parse_attrs(&fd.attrs);
+                    // TODO; handle fd_model_field.
+                    let (fd_attrs, _fd_model_field) = parse_attrs(&fd.attrs);
                     let fd_ident = fd.ident.unwrap();
                     let fd_name = format!("{}", fd_ident);
                     let fd_type = fd.ty;
@@ -799,7 +744,8 @@ pub(crate) fn handle_enum(ident: Ident, vis: Visibility, data: DataEnum) -> Toke
                 if field.unnamed.len() == 1 {
                     let fd = field.unnamed.first().unwrap();
                     let ty = &fd.ty;
-                    let (fd_attrs, fd_model_field) = parse_attrs(&fd.attrs);
+                    // TODO; handle fd_model_field.
+                    let (fd_attrs, _fd_model_field) = parse_attrs(&fd.attrs);
                     fields.push(quote! { #attrs #variant_ident( #fd_attrs #ty) });
                     to_jsons.push(quote! {
                         #ident::#variant_ident(val) => dade::ToJsonValue::to_json_value(val)
@@ -825,7 +771,8 @@ pub(crate) fn handle_enum(ident: Ident, vis: Visibility, data: DataEnum) -> Toke
                     let mut fd_schemas = Vec::new();
                     let length = field.unnamed.len();
                     for (idx, fd) in field.unnamed.iter().enumerate() {
-                        let (fd_attrs, fd_model_field) = parse_attrs(&fd.attrs);
+                        // TODO; handle fd_model_field.
+                        let (fd_attrs, _fd_model_field) = parse_attrs(&fd.attrs);
                         let ty = &fd.ty;
                         types.push(quote! { #fd_attrs #ty });
                         keys.push(format_ident!("val{}", idx));
@@ -862,7 +809,7 @@ pub(crate) fn handle_enum(ident: Ident, vis: Visibility, data: DataEnum) -> Toke
             Fields::Unit => {
                 fields.push(quote! { #attrs #variant_ident });
                 let cond = if let Some(expected) = model_field.expected {
-                    format!("{}", expected.value.value())
+                    expected.value.value().to_string()
                 } else {
                     format!("{}", variant_ident)
                 };
