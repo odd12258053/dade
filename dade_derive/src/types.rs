@@ -762,10 +762,10 @@ pub(crate) fn handle_enum(ident: Ident, vis: Visibility, data: DataEnum) -> Toke
                 });
                 statements.push(quote! {
                     if let dade::JsonValue::Object(dict) = value {
-                        let ret = || -> dade::Result<#ident> {
+                        let ret = (|| -> dade::Result<#ident> {
                             #(#fd_statements)*
                             Ok(#ident::#variant_ident { #(#idents),* })
-                        };
+                        })();
                         if ret.is_ok() {
                             return ret
                         }
@@ -807,7 +807,7 @@ pub(crate) fn handle_enum(ident: Ident, vis: Visibility, data: DataEnum) -> Toke
                         panic!("No support alias on the unnamed field.")
                     };
                     let fd_variable = format_ident!("val{}", idx);
-                    let fd_variable_key = quote!({ #idx });
+                    let fd_variable_key = quote! { #idx };
                     let fd_ty = &fd.ty;
                     let fd_model_type = ModelType::new(fd_ty);
                     let mut fd_conds: Vec<TokenStream> = Vec::new();
@@ -890,21 +890,27 @@ pub(crate) fn handle_enum(ident: Ident, vis: Visibility, data: DataEnum) -> Toke
                         #ident::#variant_ident(#(#keys)*) => dade::ToJsonValue::to_json_value(#(#keys)*)
                     });
                     statements.push(quote! {
-                        match dade::FromJsonValue::from_json_value(value) {
-                            Ok(val) => {
-                                let dict = [val];
-                                let ret = || -> dade::Result<#ident> {
-                                    #(#fd_statements)*
-                                    Ok(#ident::#variant_ident { #(#keys),* })
-                                };
-                                if ret.is_ok() {
-                                    return ret
-                                }
+                        {
+                            let dict = [value];
+                            let ret = (|| -> dade::Result<#ident> {
+                                #(#fd_statements)*
+                                Ok(#ident::#variant_ident ( #(#keys),* ))
+                            })();
+                            if ret.is_ok() {
+                                return ret
                             }
-                            Err(_) => {}
                         }
                     });
-                    schemas.push(quote! { #(#properties)* });
+                    let title = format!("{}::{}", ident, variant_ident);
+                    schemas.push(quote! {
+                        {
+                            let mut s = #(#properties)*;
+                            if let dade::JsonValue::Object(ref mut dict) = s {
+                                dict.insert("title".to_string(), dade::JsonValue::String(#title.to_string()));
+                            }
+                            s
+                        }
+                    });
                 } else {
                     to_jsons.push(quote! {
                         #ident::#variant_ident(#(#keys),*) => {
@@ -913,10 +919,10 @@ pub(crate) fn handle_enum(ident: Ident, vis: Visibility, data: DataEnum) -> Toke
                     });
                     statements.push(quote! {
                         if let dade::JsonValue::Array(dict) = value {
-                            let ret = || -> dade::Result<#ident> {
+                            let ret = (|| -> dade::Result<#ident> {
                                 #(#fd_statements)*
-                                Ok(#ident::#variant_ident { #(#keys),* })
-                            };
+                                Ok(#ident::#variant_ident ( #(#keys),* ))
+                            })();
                             if ret.is_ok() {
                                 return ret
                             }
@@ -951,11 +957,12 @@ pub(crate) fn handle_enum(ident: Ident, vis: Visibility, data: DataEnum) -> Toke
                         if val == #cond { return Ok(#ident::#variant_ident); }
                     }
                 });
+                let title = format!("{}::{}", ident, variant_ident);
                 schemas.push(quote! {
-                    dade::JsonValue::Object(std::collections::BTreeMap::from([(
-                        "const".to_string(),
-                        dade::JsonValue::String(#cond.to_string()),
-                    )]))
+                    dade::JsonValue::Object(std::collections::BTreeMap::from([
+                        ("title".to_string(), dade::JsonValue::String(#title.to_string())),
+                        ("const".to_string(), dade::JsonValue::String(#cond.to_string()))
+                    ]))
                 });
             }
         };
