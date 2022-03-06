@@ -226,7 +226,8 @@ fn handle_string_type(
         let #variable: #variable_type = (match dict.get(#variable_key) {
             Some(val) => dade::FromJsonValue::from_json_value(val),
             None => #default_val,
-        }) #(.and_then(#stmt))*?;
+        })?;
+        let #variable = Ok(#variable) #(.and_then(#stmt))*?;
     });
 }
 
@@ -394,7 +395,8 @@ fn handle_array_type(
         let #variable: #variable_type = (match dict.get(#variable_key) {
             Some(val) => dade::FromJsonValue::from_json_value(val),
             None => Err(dade::Error::new_validate_err(#msg)),
-        }) #(.and_then(#stmt))*?;
+        })?;
+        let #variable = Ok(#variable) #(.and_then(#stmt))*?;
     });
 }
 
@@ -588,26 +590,16 @@ pub(crate) fn handle_struct(ident: Ident, vis: Visibility, data: DataStruct) -> 
                             defs.insert(#name.to_string(), dade::JsonValue::Null);
                             let json_value = dade::JsonValue::Object(
                                     std::collections::BTreeMap::from([
-                                        (
-                                            "title".to_string(),
-                                            dade::JsonValue::String(dade::ToTitle::to_title(#name))
-                                        ),
-                                        (
-                                            "type".to_string(),
-                                            dade::JsonValue::String("object".to_string())
-                                        ),
+                                        ("title".to_string(), dade::JsonValue::String(dade::ToTitle::to_title(#name))),
+                                        ("type".to_string(), dade::JsonValue::String("object".to_string())),
                                         (
                                             "properties".to_string(),
-                                            dade::JsonValue::Object(
-                                                std::collections::BTreeMap::from([#(#schemas),*])
-                                            )
+                                            dade::JsonValue::Object( std::collections::BTreeMap::from([#(#schemas),*]))
                                         ),
                                         (
                                             "required".to_string(),
                                             dade::JsonValue::Array(
-                                                Vec::from([
-                                                    #(dade::JsonValue::String(#required.to_string())),*
-                                                ])
+                                                Vec::from([#(dade::JsonValue::String(#required.to_string())),*])
                                             )
                                         ),
                                     ])
@@ -774,22 +766,10 @@ pub(crate) fn handle_enum(ident: Ident, vis: Visibility, data: DataEnum) -> Toke
                 let title = format!("{}::{}", ident, variant_ident);
                 schemas.push(quote! {
                     dade::JsonValue::Object(std::collections::BTreeMap::from([
-                        (
-                            "title".to_string(),
-                            dade::JsonValue::String(#title.to_string()),
-                        ),
-                        (
-                            "type".to_string(),
-                            dade::JsonValue::String("object".to_string()),
-                        ),
-                        (
-                            "properties".to_string(),
-                            dade::JsonValue::Object(std::collections::BTreeMap::from([ #(#properties),* ])),
-                        ),
-                        (
-                            "required".to_string(),
-                            dade::JsonValue::Array(Vec::from([ #(#required),* ])),
-                        ),
+                        ("title".to_string(), dade::JsonValue::String(#title.to_string())),
+                        ("type".to_string(), dade::JsonValue::String("object".to_string())),
+                        ("properties".to_string(), dade::JsonValue::Object(std::collections::BTreeMap::from([ #(#properties),* ]))),
+                        ("required".to_string(), dade::JsonValue::Array(Vec::from([ #(#required),* ]))),
                     ]))
                 });
             }
@@ -935,9 +915,7 @@ pub(crate) fn handle_enum(ident: Ident, vis: Visibility, data: DataEnum) -> Toke
                             ("type".to_string(), dade::JsonValue::String("array".to_string())),
                             // TODO;
                             // ("items".to_string(), dade::JsonValue::Bool(false)),
-                            ("prefixItems".to_string(), dade::JsonValue::Array(Vec::from([
-                                #(#properties),*
-                            ]))),
+                            ("prefixItems".to_string(), dade::JsonValue::Array(Vec::from([#(#properties),*]))),
                         ]))
                     });
                 }
@@ -993,10 +971,7 @@ pub(crate) fn handle_enum(ident: Ident, vis: Visibility, data: DataEnum) -> Toke
                     defs.insert(
                         #name.to_string(),
                         dade::JsonValue::Object(std::collections::BTreeMap::from([
-                            (
-                                "title".to_string(),
-                                dade::JsonValue::String(#name.to_string()),
-                            ),
+                            ("title".to_string(), dade::JsonValue::String(#name.to_string())),
                             ("anyOf".to_string(), json_value),
                         ])),
                     );
