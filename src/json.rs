@@ -133,7 +133,7 @@ impl<T: FromJsonValue> FromJsonValue for Vec<T> {
                 }
                 Ok(buffer)
             }
-            _ => Err(Error::new_validate_err("expect `JsonValue::Arrya`")),
+            _ => Err(Error::new_validate_err("expect `JsonValue::Array`")),
         }
     }
 }
