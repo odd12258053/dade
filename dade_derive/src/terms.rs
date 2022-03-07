@@ -27,7 +27,7 @@ impl ToValidateToken for MinLengthTerm {
                 if value.len() >= #val {
                     Ok(value)
                 } else {
-                    Err(dade::Error::new_validate_err(#msg))
+                    Err(dade::Error::validate_err(#msg))
                 }
             }
         }
@@ -60,7 +60,7 @@ impl ToValidateToken for MaxLengthTerm {
                 if value.len() <= #val {
                     Ok(value)
                 } else {
-                    Err(dade::Error::new_validate_err(#msg))
+                    Err(dade::Error::validate_err(#msg))
                 }
             }
         }
@@ -93,7 +93,7 @@ impl ToValidateToken for MinItemsTerm {
                 if value.len() >= #val {
                     Ok(value)
                 } else {
-                    Err(dade::Error::new_validate_err(#msg))
+                    Err(dade::Error::validate_err(#msg))
                 }
             }
         }
@@ -126,7 +126,7 @@ impl ToValidateToken for MaxItemsTerm {
                 if value.len() <= #val {
                     Ok(value)
                 } else {
-                    Err(dade::Error::new_validate_err(#msg))
+                    Err(dade::Error::validate_err(#msg))
                 }
             }
         }
@@ -189,7 +189,7 @@ impl ToValidateToken for GtTerm {
                 if value > #val {
                     Ok(value)
                 } else {
-                    Err(dade::Error::new_validate_err(#msg))
+                    Err(dade::Error::validate_err(#msg))
                 }
             }
         }
@@ -223,7 +223,7 @@ impl ToValidateToken for GeTerm {
                 if value >= #val {
                     Ok(value)
                 } else {
-                    Err(dade::Error::new_validate_err(#msg))
+                    Err(dade::Error::validate_err(#msg))
                 }
             }
         }
@@ -253,7 +253,7 @@ impl ToValidateToken for LtTerm {
                 if value < #val {
                     Ok(value)
                 } else {
-                    Err(dade::Error::new_validate_err(#msg))
+                    Err(dade::Error::validate_err(#msg))
                 }
             }
         }
@@ -287,7 +287,7 @@ impl ToValidateToken for LeTerm {
                 if value <= #val {
                     Ok(value)
                 } else {
-                    Err(dade::Error::new_validate_err(#msg))
+                    Err(dade::Error::validate_err(#msg))
                 }
             }
         }

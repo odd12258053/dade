@@ -1,9 +1,6 @@
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote, ToTokens};
-use syn::{
-    Attribute, DataEnum, DataStruct, Fields, GenericArgument, Ident, PathArguments, Type,
-    Visibility,
-};
+use syn::{Attribute, DataEnum, DataStruct, Fields, GenericArgument, Ident, Lit, PathArguments, Type, Visibility};
 
 use crate::fields::ModelField;
 use crate::terms::{Condition, DefaultTerm, ToSchema, ToValidateToken};
@@ -156,6 +153,9 @@ fn handle_number_type(
     let default_val = match &model_field.default {
         Some(DefaultTerm::Lit(term)) => {
             let val = &term.value;
+            if !matches!(val, Lit::Int(_)) && !matches!(val, Lit::Float(_)) {
+                panic!("Support default condition is only numeric")
+            }
             conds.push(
                 quote! { "default".to_string(), dade::JsonValue::Number(dade::Number::from(#val)) },
             );
@@ -163,7 +163,7 @@ fn handle_number_type(
         }
         None => {
             let msg = format!("not found key, {}", variable_key);
-            quote! { Err(dade::Error::new_validate_err(#msg)) }
+            quote! { Err(dade::Error::validate_err(#msg)) }
         }
         Some(DefaultTerm::Ident(_)) => panic!("Support default condition is only numeric"),
     };
@@ -213,12 +213,15 @@ fn handle_string_type(
     let default_val = match &model_field.default {
         Some(DefaultTerm::Lit(term)) => {
             let val = &term.value;
+            if !matches!(val, Lit::Str(_)) {
+                panic!("Support default condition is only string")
+            }
             conds.push(quote! { "default".to_string(), dade::JsonValue::String(#val.to_string()) });
             quote! { Ok(#val.to_string()) }
         }
         None => {
             let msg = format!("not found key, {}", variable_key);
-            quote! { Err(dade::Error::new_validate_err(#msg)) }
+            quote! { Err(dade::Error::validate_err(#msg)) }
         }
         Some(DefaultTerm::Ident(_)) => panic!("Support default condition is only string"),
     };
@@ -249,12 +252,15 @@ fn handle_bool_type(
     let default_val = match &model_field.default {
         Some(DefaultTerm::Lit(term)) => {
             let val = &term.value;
+            if !matches!(val, Lit::Bool(_)) {
+                panic!("Support default condition is only boolean")
+            }
             conds.push(quote! { "default".to_string(), dade::JsonValue::Bool(#val) });
             quote! { Ok(#val) }
         }
         None => {
             let msg = format!("not found key, {}", variable_key);
-            quote! { Err(dade::Error::new_validate_err(#msg)) }
+            quote! { Err(dade::Error::validate_err(#msg)) }
         }
         Some(DefaultTerm::Ident(_)) => panic!("Support default condition is only boolean"),
     };
@@ -394,7 +400,7 @@ fn handle_array_type(
     statements.push(quote! {
         let #variable: #variable_type = (match dict.get(#variable_key) {
             Some(val) => dade::FromJsonValue::from_json_value(val),
-            None => Err(dade::Error::new_validate_err(#msg)),
+            None => Err(dade::Error::validate_err(#msg)),
         })?;
         let #variable = Ok(#variable) #(.and_then(#stmt))*?;
     });
@@ -427,7 +433,7 @@ fn handle_other_type(
     statements.push(quote! {
         let #variable: #variable_type = (match dict.get(#variable_key) {
             Some(val) => dade::FromJsonValue::from_json_value(val),
-            None => Err(dade::Error::new_validate_err(#msg)),
+            None => Err(dade::Error::validate_err(#msg)),
         }) #(.and_then(#stmt))*?;
     });
 }
@@ -460,6 +466,9 @@ pub(crate) fn handle_struct(ident: Ident, vis: Visibility, data: DataStruct) -> 
 
             for field in fields_named.named.iter() {
                 let (attrs, model_field) = parse_attrs(&field.attrs);
+                if model_field.expected.is_some() {
+                    panic!("Support only the expected term on the unit field.")
+                }
                 let variable: &Ident = field.ident.as_ref().unwrap();
                 let variable_vis = &field.vis;
                 let variable_key = if let Some(alias) = &model_field.alias {
@@ -579,7 +588,7 @@ pub(crate) fn handle_struct(ident: Ident, vis: Visibility, data: DataStruct) -> 
                                 #(#statements)*
                                 Ok(#ident { #(#keys),* })
                             }
-                            _ => Err(dade::Error::new_validate_err("expect `JsonValue::Object`")),
+                            _ => Err(dade::Error::validate_err("expect `JsonValue::Object`")),
                         }
                     }
                 }
@@ -958,7 +967,7 @@ pub(crate) fn handle_enum(ident: Ident, vis: Visibility, data: DataEnum) -> Toke
         impl dade::FromJsonValue for #ident {
             fn from_json_value(value: &dade::JsonValue) -> dade::Result<Self> {
                 #(#statements)*
-                Err(dade::Error::new_parse_err("No value with expected"))
+                Err(dade::Error::validate_err("No value with expected"))
             }
         }
         impl dade::RegisterSchema for #ident {

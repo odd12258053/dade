@@ -60,7 +60,7 @@ impl FromJsonValue for () {
     fn from_json_value(value: &JsonValue) -> Result<Self> {
         match value {
             JsonValue::Null => Ok(()),
-            _ => Err(Error::new_validate_err("expect `JsonValue::Null`")),
+            _ => Err(Error::validate_err("expect `JsonValue::Null`")),
         }
     }
 }
@@ -74,8 +74,8 @@ macro_rules! from_json_value_for_int {
                         JsonValue::Number(num) => num
                             .value
                             .parse()
-                            .map_err(|err: ParseIntError| Error::new_validate_err(err.to_string().as_str())),
-                        _ => Err(Error::new_validate_err("expect `JsonValue::Number`")),
+                            .map_err(|err: ParseIntError| Error::validate_err(err.to_string().as_str())),
+                        _ => Err(Error::validate_err("expect `JsonValue::Number`")),
                     }
                 }
             }
@@ -94,8 +94,8 @@ macro_rules! from_json_value_for_float {
                         JsonValue::Number(num) => num
                             .value
                             .parse()
-                            .map_err(|err: ParseFloatError| Error::new_validate_err(err.to_string().as_str())),
-                        _ => Err(Error::new_validate_err("expect `JsonValue::Number`")),
+                            .map_err(|err: ParseFloatError| Error::validate_err(err.to_string().as_str())),
+                        _ => Err(Error::validate_err("expect `JsonValue::Number`")),
                     }
                 }
             }
@@ -109,7 +109,7 @@ impl FromJsonValue for String {
     fn from_json_value(value: &JsonValue) -> Result<Self> {
         match value {
             JsonValue::String(s) => Ok(s.to_string()),
-            _ => Err(Error::new_validate_err("expect `JsonValue::String`")),
+            _ => Err(Error::validate_err("expect `JsonValue::String`")),
         }
     }
 }
@@ -118,7 +118,7 @@ impl FromJsonValue for bool {
     fn from_json_value(value: &JsonValue) -> Result<Self> {
         match value {
             JsonValue::Bool(b) => Ok(*b),
-            _ => Err(Error::new_validate_err("expect `JsonValue::Bool`")),
+            _ => Err(Error::validate_err("expect `JsonValue::Bool`")),
         }
     }
 }
@@ -133,7 +133,7 @@ impl<T: FromJsonValue> FromJsonValue for Vec<T> {
                 }
                 Ok(buffer)
             }
-            _ => Err(Error::new_validate_err("expect `JsonValue::Array`")),
+            _ => Err(Error::validate_err("expect `JsonValue::Array`")),
         }
     }
 }

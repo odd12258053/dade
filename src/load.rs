@@ -205,7 +205,7 @@ impl<S: Stream<u8>> JsonLoader<u8, S> {
         let val = self._load()?;
         self.skip_control_char();
         if !self.bytes.finish() {
-            return Err(Error::new_parse_err("extra data"));
+            return Err(Error::parse_err("extra data"));
         }
         Ok(val)
     }
@@ -238,14 +238,14 @@ impl<S: Stream<u8>> JsonLoader<u8, S> {
                 // *DIGIT
                 self.bytes.while_if(|&b| NUMBERS[b as usize]);
             }
-            _ => return Err(Error::new_parse_err("extra data")),
+            _ => return Err(Error::parse_err("extra data")),
         }
         // frac = decimal-point 1*DIGIT
         // decimal-point
         if self.bytes.next_if(|&b| b == 0x2e) {
             // 1 DIGIT
             if !self.bytes.next_if(|&b| NUMBERS[b as usize]) {
-                return Err(Error::new_parse_err("extra data"));
+                return Err(Error::parse_err("extra data"));
             }
             // *DIGIT
             self.bytes.while_if(|&b| NUMBERS[b as usize]);
@@ -256,7 +256,7 @@ impl<S: Stream<u8>> JsonLoader<u8, S> {
             self.bytes.next_if(|&b| b == 0x2d || b == 0x2b);
             // 1 DIGIT
             if !self.bytes.next_if(|&b| NUMBERS[b as usize]) {
-                return Err(Error::new_parse_err("extra data"));
+                return Err(Error::parse_err("extra data"));
             }
             // *DIGIT
             self.bytes.while_if(|&b| NUMBERS[b as usize]);
@@ -280,7 +280,7 @@ impl<S: Stream<u8>> JsonLoader<u8, S> {
                     Some(bbb @ 0x41..=0x46) => ((*bbb as u16) - 55),
                     // a..=f
                     Some(bbb @ 0x61..=0x66) => ((*bbb as u16) - 87),
-                    _ => return Err(Error::new_parse_err("extra data")),
+                    _ => return Err(Error::parse_err("extra data")),
                 }
             };
         }
@@ -303,14 +303,14 @@ impl<S: Stream<u8>> JsonLoader<u8, S> {
             }
         } else {
             if code > 0xDBFF {
-                return Err(Error::new_parse_err("no surrogate key"));
+                return Err(Error::parse_err("no surrogate key"));
             }
             if !(Some(&0x5c) == self.bytes.next() && Some(&0x75) == self.bytes.next()) {
-                return Err(Error::new_parse_err("extra data"));
+                return Err(Error::parse_err("extra data"));
             }
             let code2 = (to_num!() << 12) + (to_num!() << 8) + (to_num!() << 4) + to_num!();
             if !(0xDC00..=0xDFFF).contains(&code2) {
-                return Err(Error::new_parse_err("no surrogate key"));
+                return Err(Error::parse_err("no surrogate key"));
             }
             let u = ((code & 0b0000001111000000) >> 6) + 1;
             let x = ((code & 0b0000000000111111) << 10) + (code2 & 0b0000001111111111);
@@ -336,7 +336,7 @@ impl<S: Stream<u8>> JsonLoader<u8, S> {
             Some(0x72) => self.buffer.push(0x0d),
             Some(0x74) => self.buffer.push(0x09),
             Some(0x75) => self.handle_escaped_unicode()?,
-            _ => return Err(Error::new_parse_err("invalid control character")),
+            _ => return Err(Error::parse_err("invalid control character")),
         }
         Ok(())
     }
@@ -367,7 +367,7 @@ impl<S: Stream<u8>> JsonLoader<u8, S> {
         macro_rules! handle_unicode {
             ($range: ident) => {
                 if !self.bytes.next_if(|&b| $range[b as usize]) {
-                    return Err(Error::new_parse_err("invalid utf-8 character"));
+                    return Err(Error::parse_err("invalid utf-8 character"));
                 }
             };
         }
@@ -433,8 +433,8 @@ impl<S: Stream<u8>> JsonLoader<u8, S> {
                     handle_unicode!(UTF8_WELL_FORMED_80BF);
                     handle_unicode!(UTF8_WELL_FORMED_80BF);
                 }
-                None => return Err(Error::new_parse_err("unterminated string")),
-                _ => return Err(Error::new_parse_err("invalid control character")),
+                None => return Err(Error::parse_err("unterminated string")),
+                _ => return Err(Error::parse_err("invalid control character")),
             }
         }
     }
@@ -447,7 +447,7 @@ impl<S: Stream<u8>> JsonLoader<u8, S> {
         if self.bytes.expect(&NULL_BYTES) {
             Ok(JsonValue::Null)
         } else {
-            Err(Error::new_parse_err("extra data"))
+            Err(Error::parse_err("extra data"))
         }
     }
 
@@ -455,7 +455,7 @@ impl<S: Stream<u8>> JsonLoader<u8, S> {
         if self.bytes.expect(&TRUE_BYTES) {
             Ok(JsonValue::Bool(true))
         } else {
-            Err(Error::new_parse_err("extra data"))
+            Err(Error::parse_err("extra data"))
         }
     }
 
@@ -463,7 +463,7 @@ impl<S: Stream<u8>> JsonLoader<u8, S> {
         if self.bytes.expect(&FALSE_BYTES) {
             Ok(JsonValue::Bool(false))
         } else {
-            Err(Error::new_parse_err("extra data"))
+            Err(Error::parse_err("extra data"))
         }
     }
 
@@ -479,7 +479,7 @@ impl<S: Stream<u8>> JsonLoader<u8, S> {
             match self.bytes.next() {
                 Some(0x2c) => {}
                 Some(0x5d) => return Ok(JsonValue::Array(vec)),
-                _ => return Err(Error::new_parse_err("extra data")),
+                _ => return Err(Error::parse_err("extra data")),
             }
         }
     }
@@ -496,19 +496,19 @@ impl<S: Stream<u8>> JsonLoader<u8, S> {
                 let key = self._get_string()?;
                 self.skip_control_char();
                 if !self.bytes.next_if(|&b| b == 0x3a) {
-                    return Err(Error::new_parse_err("extra data"));
+                    return Err(Error::parse_err("extra data"));
                 }
                 if dict.insert(key, self._load()?).is_some() {
-                    return Err(Error::new_parse_err("exists same key"));
+                    return Err(Error::parse_err("exists same key"));
                 }
                 self.skip_control_char();
                 match self.bytes.next() {
                     Some(0x2c) => {}
                     Some(0x7d) => return Ok(JsonValue::Object(dict)),
-                    _ => return Err(Error::new_parse_err("extra data")),
+                    _ => return Err(Error::parse_err("extra data")),
                 }
             } else {
-                return Err(Error::new_parse_err("expect string"));
+                return Err(Error::parse_err("expect string"));
             }
         }
     }
@@ -540,7 +540,7 @@ impl<S: Stream<u8>> JsonLoader<u8, S> {
             }
             // number
             Some(0x30..=0x39 | 0x2d) => self.get_number(),
-            _ => Err(Error::new_parse_err("expect value, found no data")),
+            _ => Err(Error::parse_err("expect value, found no data")),
         }
     }
 }
