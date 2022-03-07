@@ -23,10 +23,10 @@ impl Error {
             }),
         }
     }
-    pub fn new_parse_err(message: &str) -> Self {
+    pub fn parse_err(message: &str) -> Self {
         Error::new(message, ErrorType::ParseError)
     }
-    pub fn new_validate_err(message: &str) -> Self {
+    pub fn validate_err(message: &str) -> Self {
         Error::new(message, ErrorType::ValidateError)
     }
     pub fn err_type(&self) -> ErrorType {
