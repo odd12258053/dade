@@ -21,12 +21,12 @@
 //!     verified: bool,
 //! }
 //! ```
+use syn::spanned::Spanned;
 use syn::{parse_macro_input, Data, DeriveInput};
 
 mod fields;
 mod terms;
 mod types;
-use crate::types::{handle_enum, handle_struct};
 
 /// This macro is to define a model.
 #[proc_macro_attribute]
@@ -36,9 +36,13 @@ pub fn model(
 ) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     let tokens = match input.data {
-        Data::Struct(data) => handle_struct(input.ident, input.vis, data),
-        Data::Enum(data) => handle_enum(input.ident, input.vis, data),
-        _ => panic!("Only support struct."),
-    };
+        Data::Struct(data) => types::handle_struct(input.ident, input.vis, data),
+        Data::Enum(data) => types::handle_enum(input.ident, input.vis, data),
+        _ => Err(syn::Error::new(
+            input.span(),
+            "Only support struct or enum.",
+        )),
+    }
+    .unwrap_or_else(|err| err.to_compile_error());
     proc_macro::TokenStream::from(tokens)
 }

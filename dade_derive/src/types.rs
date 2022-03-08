@@ -1,6 +1,10 @@
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote, ToTokens};
-use syn::{Attribute, DataEnum, DataStruct, Fields, GenericArgument, Ident, Lit, PathArguments, Type, Visibility};
+use syn::spanned::Spanned;
+use syn::{
+    Attribute, DataEnum, DataStruct, Fields, GenericArgument, Ident, Lit, PathArguments, Type,
+    Visibility,
+};
 
 use crate::fields::ModelField;
 use crate::terms::{Condition, DefaultTerm, ToSchema, ToValidateToken};
@@ -21,60 +25,66 @@ const NUMBER_TYPES: [&str; 14] = [
 ];
 
 impl ModelType {
-    fn new(ty: &Type) -> Self {
+    fn new(ty: &Type) -> Result<Self, syn::Error> {
         match ty {
             Type::Path(type_path) => {
                 let type_token = type_path.to_token_stream().to_string();
                 if NUMBER_TYPES.iter().any(|&s| s == type_token) {
-                    ModelType::Number
+                    Ok(ModelType::Number)
                 } else if type_token == "String" {
-                    ModelType::String
+                    Ok(ModelType::String)
                 } else if type_token == "bool" {
-                    ModelType::Bool
+                    Ok(ModelType::Bool)
                 } else {
                     let segment = type_path.path.segments.iter().next().unwrap();
                     let ident = &segment.ident;
                     if ident == "Option" {
-                        ModelType::Optional(Box::new({
+                        Ok(ModelType::Optional(Box::new({
                             match &segment.arguments {
                                 PathArguments::AngleBracketed(angle_bracketed) => {
                                     if angle_bracketed.args.is_empty()
                                         || angle_bracketed.args.len() > 1
                                     {
-                                        panic!("Invalid type")
+                                        return Err(syn::Error::new(ty.span(), "Invalid type"));
                                     }
                                     match angle_bracketed.args.first().unwrap() {
                                         GenericArgument::Type(inner_type) => {
-                                            ModelType::new(inner_type)
+                                            ModelType::new(inner_type)?
                                         }
-                                        _ => panic!("Invalid type"),
+                                        _ => {
+                                            return Err(syn::Error::new(ty.span(), "Invalid type"))
+                                        }
                                     }
                                 }
-                                _ => panic!("Invalid type"),
+                                _ => return Err(syn::Error::new(ty.span(), "Invalid type")),
                             }
-                        }))
+                        })))
                     } else if ident == "Vec" {
-                        ModelType::Array
+                        Ok(ModelType::Array)
                     } else {
-                        ModelType::Other
+                        Ok(ModelType::Other)
                     }
                 }
             }
             Type::Tuple(type_tuple) => {
                 if type_tuple.to_token_stream().to_string() == "()" {
-                    ModelType::Null
+                    Ok(ModelType::Null)
                 } else {
-                    panic!("Invalid type")
+                    Err(syn::Error::new(ty.span(), "Invalid type"))
                 }
             }
-            _ => panic!("Invalid type"),
+            _ => Err(syn::Error::new(ty.span(), "Invalid type")),
         }
     }
 }
 
-fn make_null_condition(model_field: &ModelField) {
+fn make_null_condition(model_field: &ModelField) -> Result<(), &str> {
     if !model_field.conditions.is_empty() {
-        panic!("Support condition is alias, default and validate")
+        Err("Support condition is alias, default")
+    } else if model_field.validate.is_some() {
+        Err("Support condition is alias, default")
+    } else {
+        Ok(())
     }
 }
 
@@ -85,19 +95,27 @@ fn handle_null_type(
     variable_key: &TokenStream,
     statements: &mut Vec<TokenStream>,
     conds: &mut Vec<TokenStream>,
-) {
-    make_null_condition(model_field);
+) -> Result<(), syn::Error> {
+    make_null_condition(model_field).map_err(|msg| syn::Error::new(variable.span(), msg))?;
     let default_val = match &model_field.default {
         Some(DefaultTerm::Ident(term)) => {
             if &term.value == "null" {
                 conds.push(quote! { "default".to_string(), dade::JsonValue::Null });
                 quote! { () }
             } else {
-                panic!("Support default condition is only `null`")
+                return Err(syn::Error::new(
+                    variable.span(),
+                    "Support default condition is only `null`",
+                ));
             }
         }
         None => quote! { () },
-        Some(DefaultTerm::Lit(_)) => panic!("Support default condition is only `null`"),
+        Some(DefaultTerm::Lit(_)) => {
+            return Err(syn::Error::new(
+                variable.span(),
+                "Support default condition is only `null`",
+            ))
+        }
     };
     statements.push(quote! {
         let #variable: #variable_type = match dict.get(#variable_key) {
@@ -105,6 +123,7 @@ fn handle_null_type(
             None => #default_val,
         };
     });
+    Ok(())
 }
 
 fn make_number_condition(
@@ -112,7 +131,7 @@ fn make_number_condition(
     model_field: &ModelField,
     stmt: &mut Vec<TokenStream>,
     conds: &mut Vec<TokenStream>,
-) {
+) -> Result<(), syn::Error> {
     for cond in model_field.conditions.iter() {
         match cond {
             Condition::Gt(term) => {
@@ -131,9 +150,15 @@ fn make_number_condition(
                 stmt.push(term.to_validate_token(variable));
                 conds.push(term.to_schema());
             }
-            _ => panic!("Support condition is gt, ge, lt, le, alias, default and validate"),
+            _ => {
+                return Err(syn::Error::new(
+                    variable.span(),
+                    "Support condition is gt, ge, lt, le, alias, default and validate",
+                ))
+            }
         }
     }
+    Ok(())
 }
 
 fn handle_number_type(
@@ -143,9 +168,9 @@ fn handle_number_type(
     variable_key: &TokenStream,
     statements: &mut Vec<TokenStream>,
     conds: &mut Vec<TokenStream>,
-) {
+) -> Result<(), syn::Error> {
     let mut stmt = Vec::new();
-    make_number_condition(variable, model_field, &mut stmt, conds);
+    make_number_condition(variable, model_field, &mut stmt, conds)?;
     if let Some(term) = &model_field.validate {
         let fn_name = &term.value;
         stmt.push(quote! { #fn_name });
@@ -154,7 +179,10 @@ fn handle_number_type(
         Some(DefaultTerm::Lit(term)) => {
             let val = &term.value;
             if !matches!(val, Lit::Int(_)) && !matches!(val, Lit::Float(_)) {
-                panic!("Support default condition is only numeric")
+                return Err(syn::Error::new(
+                    variable.span(),
+                    "Support default condition is only numeric",
+                ));
             }
             conds.push(
                 quote! { "default".to_string(), dade::JsonValue::Number(dade::Number::from(#val)) },
@@ -165,7 +193,12 @@ fn handle_number_type(
             let msg = format!("not found key, {}", variable_key);
             quote! { Err(dade::Error::validate_err(#msg)) }
         }
-        Some(DefaultTerm::Ident(_)) => panic!("Support default condition is only numeric"),
+        Some(DefaultTerm::Ident(_)) => {
+            return Err(syn::Error::new(
+                variable.span(),
+                "Support default condition is only numeric",
+            ))
+        }
     };
     statements.push(quote! {
         let #variable: #variable_type = (match dict.get(#variable_key) {
@@ -173,6 +206,7 @@ fn handle_number_type(
             None => #default_val,
         }) #(.and_then(#stmt))*?;
     });
+    Ok(())
 }
 
 fn make_string_condition(
@@ -180,7 +214,7 @@ fn make_string_condition(
     model_field: &ModelField,
     stmt: &mut Vec<TokenStream>,
     conds: &mut Vec<TokenStream>,
-) {
+) -> Result<(), syn::Error> {
     for cond in model_field.conditions.iter() {
         match cond {
             Condition::MinLength(term) => {
@@ -191,9 +225,15 @@ fn make_string_condition(
                 stmt.push(term.to_validate_token(variable));
                 conds.push(term.to_schema());
             }
-            _ => panic!("Support condition is min_length, max_length, alias, default and validate"),
+            _ => {
+                return Err(syn::Error::new(
+                    variable.span(),
+                    "Support condition is min_length, max_length, alias, default and validate",
+                ))
+            }
         }
     }
+    Ok(())
 }
 
 fn handle_string_type(
@@ -203,9 +243,9 @@ fn handle_string_type(
     variable_key: &TokenStream,
     statements: &mut Vec<TokenStream>,
     conds: &mut Vec<TokenStream>,
-) {
+) -> Result<(), syn::Error> {
     let mut stmt = Vec::new();
-    make_string_condition(variable, model_field, &mut stmt, conds);
+    make_string_condition(variable, model_field, &mut stmt, conds)?;
     if let Some(term) = &model_field.validate {
         let fn_name = &term.value;
         stmt.push(quote! { #fn_name });
@@ -214,7 +254,10 @@ fn handle_string_type(
         Some(DefaultTerm::Lit(term)) => {
             let val = &term.value;
             if !matches!(val, Lit::Str(_)) {
-                panic!("Support default condition is only string")
+                return Err(syn::Error::new(
+                    variable.span(),
+                    "Support default condition is only string",
+                ));
             }
             conds.push(quote! { "default".to_string(), dade::JsonValue::String(#val.to_string()) });
             quote! { Ok(#val.to_string()) }
@@ -223,7 +266,12 @@ fn handle_string_type(
             let msg = format!("not found key, {}", variable_key);
             quote! { Err(dade::Error::validate_err(#msg)) }
         }
-        Some(DefaultTerm::Ident(_)) => panic!("Support default condition is only string"),
+        Some(DefaultTerm::Ident(_)) => {
+            return Err(syn::Error::new(
+                variable.span(),
+                "Support default condition is only string",
+            ))
+        }
     };
     statements.push(quote! {
         let #variable: #variable_type = (match dict.get(#variable_key) {
@@ -232,12 +280,14 @@ fn handle_string_type(
         })?;
         let #variable = Ok(#variable) #(.and_then(#stmt))*?;
     });
+    Ok(())
 }
 
-fn make_bool_condition(model_field: &ModelField) {
+fn make_bool_condition(model_field: &ModelField) -> Result<(), &str> {
     if !model_field.conditions.is_empty() {
-        panic!("Support condition is alias, default and validate")
+        return Err("Support condition is alias, default and validate");
     }
+    Ok(())
 }
 
 fn handle_bool_type(
@@ -247,13 +297,16 @@ fn handle_bool_type(
     variable_key: &TokenStream,
     statements: &mut Vec<TokenStream>,
     conds: &mut Vec<TokenStream>,
-) {
-    make_bool_condition(model_field);
+) -> Result<(), syn::Error> {
+    make_bool_condition(model_field).map_err(|msg| syn::Error::new(variable.span(), msg))?;
     let default_val = match &model_field.default {
         Some(DefaultTerm::Lit(term)) => {
             let val = &term.value;
             if !matches!(val, Lit::Bool(_)) {
-                panic!("Support default condition is only boolean")
+                return Err(syn::Error::new(
+                    variable.span(),
+                    "Support default condition is only boolean",
+                ));
             }
             conds.push(quote! { "default".to_string(), dade::JsonValue::Bool(#val) });
             quote! { Ok(#val) }
@@ -262,7 +315,12 @@ fn handle_bool_type(
             let msg = format!("not found key, {}", variable_key);
             quote! { Err(dade::Error::validate_err(#msg)) }
         }
-        Some(DefaultTerm::Ident(_)) => panic!("Support default condition is only boolean"),
+        Some(DefaultTerm::Ident(_)) => {
+            return Err(syn::Error::new(
+                variable.span(),
+                "Support default condition is only boolean",
+            ))
+        }
     };
     let mut stmt = Vec::new();
     if let Some(term) = &model_field.validate {
@@ -275,6 +333,7 @@ fn handle_bool_type(
             None => #default_val,
         }) #(.and_then(#stmt))*?;
     });
+    Ok(())
 }
 
 fn handle_optional_type(
@@ -285,7 +344,7 @@ fn handle_optional_type(
     variable_key: &TokenStream,
     statements: &mut Vec<TokenStream>,
     conds: &mut Vec<TokenStream>,
-) {
+) -> Result<(), syn::Error> {
     let default_val = match &model_field.default {
         Some(DefaultTerm::Ident(term)) => {
             if term.value == "null" {
@@ -294,7 +353,10 @@ fn handle_optional_type(
                 });
                 quote! { None }
             } else {
-                panic!("Support default condition is `null` or value for inner type.")
+                return Err(syn::Error::new(
+                    variable.span(),
+                    "Support default condition is `null` or value for inner type.",
+                ));
             }
         }
         Some(DefaultTerm::Lit(term)) => match inner_type {
@@ -319,10 +381,30 @@ fn handle_optional_type(
                 });
                 quote! { Some(#val) }
             }
-            ModelType::Null => panic!("invalid type. You only use `()`."),
-            ModelType::Optional(_) => panic!("invalid type. Don't support nested optional type."),
-            ModelType::Array => panic!("Support default condition is only `null`"),
-            ModelType::Other => panic!("Support default condition is only `null`"),
+            ModelType::Null => {
+                return Err(syn::Error::new(
+                    variable.span(),
+                    "invalid type. You only use `()`.",
+                ))
+            }
+            ModelType::Optional(_) => {
+                return Err(syn::Error::new(
+                    variable.span(),
+                    "invalid type. Don't support nested optional type.",
+                ))
+            }
+            ModelType::Array => {
+                return Err(syn::Error::new(
+                    variable.span(),
+                    "Support default condition is only `null`",
+                ))
+            }
+            ModelType::Other => {
+                return Err(syn::Error::new(
+                    variable.span(),
+                    "Support default condition is only `null`",
+                ))
+            }
         },
         None => quote! { None },
     };
@@ -330,13 +412,21 @@ fn handle_optional_type(
     let mut stmt = Vec::new();
     if !model_field.conditions.is_empty() {
         match inner_type {
-            ModelType::Null => make_null_condition(model_field),
-            ModelType::Number => make_number_condition(variable, model_field, &mut stmt, conds),
-            ModelType::String => make_string_condition(variable, model_field, &mut stmt, conds),
-            ModelType::Bool => make_bool_condition(model_field),
-            ModelType::Optional(_) => panic!("Support condition is alias and validate"),
-            ModelType::Array => make_array_condition(variable, model_field, &mut stmt, conds),
-            ModelType::Other => make_other_condition(model_field),
+            ModelType::Null => make_null_condition(model_field)
+                .map_err(|msg| syn::Error::new(variable.span(), msg))?,
+            ModelType::Number => make_number_condition(variable, model_field, &mut stmt, conds)?,
+            ModelType::String => make_string_condition(variable, model_field, &mut stmt, conds)?,
+            ModelType::Bool => make_bool_condition(model_field)
+                .map_err(|msg| syn::Error::new(variable.span(), msg))?,
+            ModelType::Optional(_) => {
+                return Err(syn::Error::new(
+                    variable.span(),
+                    "Support condition is alias and validate",
+                ))
+            }
+            ModelType::Array => make_array_condition(variable, model_field, &mut stmt, conds)?,
+            ModelType::Other => make_other_condition(model_field)
+                .map_err(|msg| syn::Error::new(variable.span(), msg))?,
         }
     }
 
@@ -356,6 +446,7 @@ fn handle_optional_type(
             }
         }) #(.and_then(#cstmt))*?;
     });
+    Ok(())
 }
 
 fn make_array_condition(
@@ -363,7 +454,7 @@ fn make_array_condition(
     model_field: &ModelField,
     stmt: &mut Vec<TokenStream>,
     conds: &mut Vec<TokenStream>,
-) {
+) -> Result<(), syn::Error> {
     for cond in model_field.conditions.iter() {
         match cond {
             Condition::MinItems(term) => {
@@ -374,9 +465,15 @@ fn make_array_condition(
                 stmt.push(term.to_validate_token(variable));
                 conds.push(term.to_schema());
             }
-            _ => panic!("Support condition is min_items, max_items, alias and validate"),
+            _ => {
+                return Err(syn::Error::new(
+                    variable.span(),
+                    "Support condition is min_items, max_items, alias and validate",
+                ))
+            }
         }
     }
+    Ok(())
 }
 
 fn handle_array_type(
@@ -386,12 +483,15 @@ fn handle_array_type(
     variable_key: &TokenStream,
     statements: &mut Vec<TokenStream>,
     conds: &mut Vec<TokenStream>,
-) {
+) -> Result<(), syn::Error> {
     if model_field.default.is_some() {
-        panic!("Support condition is min_items, max_items, alias and validate")
+        return Err(syn::Error::new(
+            variable.span(),
+            "Support condition is min_items, max_items, alias and validate",
+        ));
     }
     let mut stmt = Vec::new();
-    make_array_condition(variable, model_field, &mut stmt, conds);
+    make_array_condition(variable, model_field, &mut stmt, conds)?;
     if let Some(term) = &model_field.validate {
         let fn_name = &term.value;
         stmt.push(quote! { #fn_name });
@@ -404,12 +504,14 @@ fn handle_array_type(
         })?;
         let #variable = Ok(#variable) #(.and_then(#stmt))*?;
     });
+    Ok(())
 }
 
-fn make_other_condition(model_field: &ModelField) {
+fn make_other_condition(model_field: &ModelField) -> Result<(), &str> {
     if !model_field.conditions.is_empty() {
-        panic!("Support condition is alias and validate")
+        return Err("Support condition is alias and validate");
     }
+    Ok(())
 }
 
 fn handle_other_type(
@@ -419,11 +521,14 @@ fn handle_other_type(
     variable_key: &TokenStream,
     statements: &mut Vec<TokenStream>,
     _conds: &mut Vec<TokenStream>,
-) {
+) -> Result<(), syn::Error> {
     if model_field.default.is_some() {
-        panic!("Support condition is alias and validate")
+        return Err(syn::Error::new(
+            variable.span(),
+            "Support condition is alias and validate",
+        ));
     }
-    make_other_condition(model_field);
+    make_other_condition(model_field).map_err(|msg| syn::Error::new(variable.span(), msg))?;
     let mut stmt = Vec::new();
     if let Some(term) = &model_field.validate {
         let fn_name = &term.value;
@@ -436,6 +541,7 @@ fn handle_other_type(
             None => Err(dade::Error::validate_err(#msg)),
         }) #(.and_then(#stmt))*?;
     });
+    Ok(())
 }
 
 fn parse_attrs(attrs: &[Attribute]) -> (TokenStream, ModelField) {
@@ -454,7 +560,11 @@ fn parse_attrs(attrs: &[Attribute]) -> (TokenStream, ModelField) {
     (quote! {#(#bag)*}, model_field)
 }
 
-pub(crate) fn handle_struct(ident: Ident, vis: Visibility, data: DataStruct) -> TokenStream {
+pub(crate) fn handle_struct(
+    ident: Ident,
+    vis: Visibility,
+    data: DataStruct,
+) -> Result<TokenStream, syn::Error> {
     match data.fields {
         Fields::Named(fields_named) => {
             let mut fields = Vec::new();
@@ -467,7 +577,10 @@ pub(crate) fn handle_struct(ident: Ident, vis: Visibility, data: DataStruct) -> 
             for field in fields_named.named.iter() {
                 let (attrs, model_field) = parse_attrs(&field.attrs);
                 if model_field.expected.is_some() {
-                    panic!("Support only the expected term on the unit field.")
+                    return Err(syn::Error::new(
+                        field.span(),
+                        "Support only the expected term on the unit field.",
+                    ));
                 }
                 let variable: &Ident = field.ident.as_ref().unwrap();
                 let variable_vis = &field.vis;
@@ -490,7 +603,7 @@ pub(crate) fn handle_struct(ident: Ident, vis: Visibility, data: DataStruct) -> 
                     "title".to_string(),
                     dade::JsonValue::String(dade::ToTitle::to_title(#variable_key))
                 }]);
-                let model_type = ModelType::new(ty);
+                let model_type = ModelType::new(ty)?;
                 if model_field.default.is_none() && !matches!(model_type, ModelType::Optional(_)) {
                     required.push(quote! { #variable_key })
                 }
@@ -502,7 +615,7 @@ pub(crate) fn handle_struct(ident: Ident, vis: Visibility, data: DataStruct) -> 
                         &variable_key,
                         &mut statements,
                         &mut conds,
-                    ),
+                    )?,
                     ModelType::Number => handle_number_type(
                         &model_field,
                         variable,
@@ -510,7 +623,7 @@ pub(crate) fn handle_struct(ident: Ident, vis: Visibility, data: DataStruct) -> 
                         &variable_key,
                         &mut statements,
                         &mut conds,
-                    ),
+                    )?,
                     ModelType::String => handle_string_type(
                         &model_field,
                         variable,
@@ -518,7 +631,7 @@ pub(crate) fn handle_struct(ident: Ident, vis: Visibility, data: DataStruct) -> 
                         &variable_key,
                         &mut statements,
                         &mut conds,
-                    ),
+                    )?,
                     ModelType::Bool => handle_bool_type(
                         &model_field,
                         variable,
@@ -526,7 +639,7 @@ pub(crate) fn handle_struct(ident: Ident, vis: Visibility, data: DataStruct) -> 
                         &variable_key,
                         &mut statements,
                         &mut conds,
-                    ),
+                    )?,
                     ModelType::Optional(inner_type) => handle_optional_type(
                         inner_type,
                         &model_field,
@@ -535,7 +648,7 @@ pub(crate) fn handle_struct(ident: Ident, vis: Visibility, data: DataStruct) -> 
                         &variable_key,
                         &mut statements,
                         &mut conds,
-                    ),
+                    )?,
                     ModelType::Array => handle_array_type(
                         &model_field,
                         variable,
@@ -543,7 +656,7 @@ pub(crate) fn handle_struct(ident: Ident, vis: Visibility, data: DataStruct) -> 
                         &variable_key,
                         &mut statements,
                         &mut conds,
-                    ),
+                    )?,
                     ModelType::Other => handle_other_type(
                         &model_field,
                         variable,
@@ -551,7 +664,7 @@ pub(crate) fn handle_struct(ident: Ident, vis: Visibility, data: DataStruct) -> 
                         &variable_key,
                         &mut statements,
                         &mut conds,
-                    ),
+                    )?,
                 }
                 schemas.push(quote! {
                     (
@@ -572,7 +685,7 @@ pub(crate) fn handle_struct(ident: Ident, vis: Visibility, data: DataStruct) -> 
             let name = ident.to_string();
             let data_type = data.struct_token;
             let def_name = format!("#/definitions/{}", ident);
-            quote! {
+            Ok(quote! {
                 #vis #data_type #ident { #(#fields),* }
                 impl dade::ToJsonValue for #ident {
                     fn to_json_value(&self) -> dade::JsonValue {
@@ -626,13 +739,17 @@ pub(crate) fn handle_struct(ident: Ident, vis: Visibility, data: DataStruct) -> 
                         )
                     }
                 }
-            }
+            })
         }
-        _ => panic!("Only support named field."),
+        _ => Err(syn::Error::new(ident.span(), "Only support named field.")),
     }
 }
 
-pub(crate) fn handle_enum(ident: Ident, vis: Visibility, data: DataEnum) -> TokenStream {
+pub(crate) fn handle_enum(
+    ident: Ident,
+    vis: Visibility,
+    data: DataEnum,
+) -> Result<TokenStream, syn::Error> {
     let mut fields = Vec::new();
     let mut to_jsons = Vec::new();
     let mut statements = Vec::new();
@@ -644,7 +761,10 @@ pub(crate) fn handle_enum(ident: Ident, vis: Visibility, data: DataEnum) -> Toke
         match variant.fields {
             Fields::Named(field) => {
                 if model_field.expected.is_some() {
-                    panic!("Support only the expected term on the unit field.")
+                    return Err(syn::Error::new(
+                        variant_ident.span(),
+                        "Support only the expected term on the unit field.",
+                    ));
                 }
 
                 let mut fds = Vec::new();
@@ -665,7 +785,7 @@ pub(crate) fn handle_enum(ident: Ident, vis: Visibility, data: DataEnum) -> Toke
                         quote! { #val }
                     };
                     let fd_ty = &fd.ty;
-                    let fd_model_type = ModelType::new(fd_ty);
+                    let fd_model_type = ModelType::new(fd_ty)?;
 
                     let mut fd_conds: Vec<TokenStream> = Vec::from([quote! {
                         "title".to_string(),
@@ -680,7 +800,7 @@ pub(crate) fn handle_enum(ident: Ident, vis: Visibility, data: DataEnum) -> Toke
                             &fd_variable_key,
                             &mut fd_statements,
                             &mut fd_conds,
-                        ),
+                        )?,
                         ModelType::Number => handle_number_type(
                             &fd_model_field,
                             &fd_variable,
@@ -688,7 +808,7 @@ pub(crate) fn handle_enum(ident: Ident, vis: Visibility, data: DataEnum) -> Toke
                             &fd_variable_key,
                             &mut fd_statements,
                             &mut fd_conds,
-                        ),
+                        )?,
                         ModelType::String => handle_string_type(
                             &fd_model_field,
                             &fd_variable,
@@ -696,7 +816,7 @@ pub(crate) fn handle_enum(ident: Ident, vis: Visibility, data: DataEnum) -> Toke
                             &fd_variable_key,
                             &mut fd_statements,
                             &mut fd_conds,
-                        ),
+                        )?,
                         ModelType::Bool => handle_bool_type(
                             &fd_model_field,
                             &fd_variable,
@@ -704,7 +824,7 @@ pub(crate) fn handle_enum(ident: Ident, vis: Visibility, data: DataEnum) -> Toke
                             &fd_variable_key,
                             &mut fd_statements,
                             &mut fd_conds,
-                        ),
+                        )?,
                         ModelType::Optional(inner_type) => handle_optional_type(
                             inner_type,
                             &fd_model_field,
@@ -713,7 +833,7 @@ pub(crate) fn handle_enum(ident: Ident, vis: Visibility, data: DataEnum) -> Toke
                             &fd_variable_key,
                             &mut fd_statements,
                             &mut fd_conds,
-                        ),
+                        )?,
                         ModelType::Array => handle_array_type(
                             &fd_model_field,
                             &fd_variable,
@@ -721,7 +841,7 @@ pub(crate) fn handle_enum(ident: Ident, vis: Visibility, data: DataEnum) -> Toke
                             &fd_variable_key,
                             &mut fd_statements,
                             &mut fd_conds,
-                        ),
+                        )?,
                         ModelType::Other => handle_other_type(
                             &fd_model_field,
                             &fd_variable,
@@ -729,7 +849,7 @@ pub(crate) fn handle_enum(ident: Ident, vis: Visibility, data: DataEnum) -> Toke
                             &fd_variable_key,
                             &mut fd_statements,
                             &mut fd_conds,
-                        ),
+                        )?,
                     }
 
                     fds.push(quote! { #fd_attrs #fd_variable:#fd_ty });
@@ -784,7 +904,10 @@ pub(crate) fn handle_enum(ident: Ident, vis: Visibility, data: DataEnum) -> Toke
             }
             Fields::Unnamed(field) => {
                 if model_field.expected.is_some() {
-                    panic!("Support only the expected term on the unnamed field.")
+                    return Err(syn::Error::new(
+                        field.span(),
+                        "No support expected term on the unnamed field.",
+                    ));
                 }
                 let mut fds = Vec::new();
                 let mut keys = Vec::new();
@@ -793,12 +916,21 @@ pub(crate) fn handle_enum(ident: Ident, vis: Visibility, data: DataEnum) -> Toke
                 for (idx, fd) in field.unnamed.iter().enumerate() {
                     let (fd_attrs, fd_model_field) = parse_attrs(&fd.attrs);
                     if fd_model_field.alias.is_some() {
-                        panic!("No support alias on the unnamed field.")
+                        return Err(syn::Error::new(
+                            field.span(),
+                            "No support alias term on the unnamed field.",
+                        ));
                     };
+                    if fd_model_field.expected.is_some() {
+                        return Err(syn::Error::new(
+                            field.span(),
+                            "No support expected term on the unnamed field.",
+                        ));
+                    }
                     let fd_variable = format_ident!("val{}", idx);
                     let fd_variable_key = quote! { #idx };
                     let fd_ty = &fd.ty;
-                    let fd_model_type = ModelType::new(fd_ty);
+                    let fd_model_type = ModelType::new(fd_ty)?;
                     let mut fd_conds: Vec<TokenStream> = Vec::new();
 
                     match &fd_model_type {
@@ -809,7 +941,7 @@ pub(crate) fn handle_enum(ident: Ident, vis: Visibility, data: DataEnum) -> Toke
                             &fd_variable_key,
                             &mut fd_statements,
                             &mut fd_conds,
-                        ),
+                        )?,
                         ModelType::Number => handle_number_type(
                             &fd_model_field,
                             &fd_variable,
@@ -817,7 +949,7 @@ pub(crate) fn handle_enum(ident: Ident, vis: Visibility, data: DataEnum) -> Toke
                             &fd_variable_key,
                             &mut fd_statements,
                             &mut fd_conds,
-                        ),
+                        )?,
                         ModelType::String => handle_string_type(
                             &fd_model_field,
                             &fd_variable,
@@ -825,7 +957,7 @@ pub(crate) fn handle_enum(ident: Ident, vis: Visibility, data: DataEnum) -> Toke
                             &fd_variable_key,
                             &mut fd_statements,
                             &mut fd_conds,
-                        ),
+                        )?,
                         ModelType::Bool => handle_bool_type(
                             &fd_model_field,
                             &fd_variable,
@@ -833,7 +965,7 @@ pub(crate) fn handle_enum(ident: Ident, vis: Visibility, data: DataEnum) -> Toke
                             &fd_variable_key,
                             &mut fd_statements,
                             &mut fd_conds,
-                        ),
+                        )?,
                         ModelType::Optional(inner_type) => handle_optional_type(
                             inner_type,
                             &fd_model_field,
@@ -842,7 +974,7 @@ pub(crate) fn handle_enum(ident: Ident, vis: Visibility, data: DataEnum) -> Toke
                             &fd_variable_key,
                             &mut fd_statements,
                             &mut fd_conds,
-                        ),
+                        )?,
                         ModelType::Array => handle_array_type(
                             &fd_model_field,
                             &fd_variable,
@@ -850,7 +982,7 @@ pub(crate) fn handle_enum(ident: Ident, vis: Visibility, data: DataEnum) -> Toke
                             &fd_variable_key,
                             &mut fd_statements,
                             &mut fd_conds,
-                        ),
+                        )?,
                         ModelType::Other => handle_other_type(
                             &fd_model_field,
                             &fd_variable,
@@ -858,7 +990,7 @@ pub(crate) fn handle_enum(ident: Ident, vis: Visibility, data: DataEnum) -> Toke
                             &fd_variable_key,
                             &mut fd_statements,
                             &mut fd_conds,
-                        ),
+                        )?,
                     }
 
                     fds.push(quote! { #fd_attrs #fd_ty });
@@ -957,7 +1089,7 @@ pub(crate) fn handle_enum(ident: Ident, vis: Visibility, data: DataEnum) -> Toke
     let data_type = data.enum_token;
     let name = ident.to_string();
     let def_name = format!("#/definitions/{}", ident);
-    quote! {
+    Ok(quote! {
         #vis #data_type #ident { #(#fields),* }
         impl dade::ToJsonValue for #ident {
             fn to_json_value(&self) -> dade::JsonValue {
@@ -991,5 +1123,5 @@ pub(crate) fn handle_enum(ident: Ident, vis: Visibility, data: DataEnum) -> Toke
                 )]))
             }
         }
-    }
+    })
 }

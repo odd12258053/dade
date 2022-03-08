@@ -19,4 +19,5 @@ members = [
 ]
 
 [dev-dependencies]
+paste = "1.0.6"
 trybuild = "1.0.56"
