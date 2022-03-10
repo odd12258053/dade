@@ -36,8 +36,8 @@ pub fn model(
 ) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     let tokens = match input.data {
-        Data::Struct(data) => types::handle_struct(input.ident, input.vis, data),
-        Data::Enum(data) => types::handle_enum(input.ident, input.vis, data),
+        Data::Struct(data) => types::handle_struct(input.ident, input.vis, input.attrs, data),
+        Data::Enum(data) => types::handle_enum(input.ident, input.vis, input.attrs, data),
         _ => Err(syn::Error::new(
             input.span(),
             "Only support struct or enum.",

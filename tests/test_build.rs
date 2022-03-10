@@ -31,8 +31,17 @@ fail_pattern!(
         bool, f32, f64, i128, i16, i32, i64, i8, isize, string, u128, u16, u32, u64, u8, unit,
         usize, vec
     ),
-    "./tests/models/struct",
-    struct
+    "./tests/models/struct/named",
+    struct_named
+);
+
+fail_pattern!(
+    (
+        bool, f32, f64, i128, i16, i32, i64, i8, isize, string, u128, u16, u32, u64, u8, unit,
+        usize, vec
+    ),
+    "./tests/models/struct/unnamed",
+    struct_unnamed
 );
 
 fail_pattern!(
@@ -60,9 +69,20 @@ pass_pattern!(
         bool, f32, f64, i128, i16, i32, i64, i8, isize, string, u128, u16, u32, u64, u8, unit,
         usize, vec
     ),
-    "./tests/models/struct",
-    struct
+    "./tests/models/struct/named",
+    struct_named
 );
+
+pass_pattern!(
+    (
+        bool, f32, f64, i128, i16, i32, i64, i8, isize, string, u128, u16, u32, u64, u8, unit,
+        usize, vec
+    ),
+    "./tests/models/struct/unnamed",
+    struct_unnamed
+);
+
+pass_pattern!(unit, "./tests/models/struct/", struct_unit);
 
 pass_pattern!(
     (

@@ -561,6 +561,7 @@ fn parse_attrs(attrs: &[Attribute]) -> (TokenStream, ModelField) {
 pub(crate) fn handle_struct(
     ident: Ident,
     vis: Visibility,
+    attrs: Vec<Attribute>,
     data: DataStruct,
 ) -> Result<TokenStream, syn::Error> {
     match data.fields {
@@ -678,7 +679,7 @@ pub(crate) fn handle_struct(
             let data_type = data.struct_token;
             let def_name = format!("#/definitions/{}", ident);
             Ok(quote! {
-                #vis #data_type #ident { #(#fields),* }
+                #(#attrs)* #vis #data_type #ident { #(#fields),* }
                 impl dade::ToJsonValue for #ident {
                     fn to_json_value(&self) -> dade::JsonValue {
                         dade::JsonValue::Object(
@@ -733,13 +734,323 @@ pub(crate) fn handle_struct(
                 }
             })
         }
-        _ => Err(syn::Error::new(ident.span(), "Only support named field.")),
+        Fields::Unnamed(fields_unnamed) => {
+            if fields_unnamed.unnamed.len() == 1 {
+                let field = fields_unnamed.unnamed.first().unwrap();
+                let (fd_attrs, fd_model_field) = parse_attrs(&field.attrs);
+                if fd_model_field.alias.is_some() {
+                    return Err(syn::Error::new(
+                        field.span(),
+                        "No support alias term on the unnamed field.",
+                    ));
+                };
+                let fd_ty = &field.ty;
+                let fd_vis = &field.vis;
+                let mut fd_statements = Vec::new();
+                let mut fd_conds = Vec::new();
+                let fd_variable = format_ident!("val0");
+                let fd_variable_key = quote! { 0 };
+                let fd_model_type = ModelType::new(fd_ty)?;
+
+                match &fd_model_type {
+                    ModelType::Null => handle_null_type(
+                        &fd_model_field,
+                        &fd_variable,
+                        fd_ty,
+                        &fd_variable_key,
+                        &mut fd_statements,
+                        &mut fd_conds,
+                    )?,
+                    ModelType::Number => handle_number_type(
+                        &fd_model_field,
+                        &fd_variable,
+                        fd_ty,
+                        &fd_variable_key,
+                        &mut fd_statements,
+                        &mut fd_conds,
+                    )?,
+                    ModelType::String => handle_string_type(
+                        &fd_model_field,
+                        &fd_variable,
+                        fd_ty,
+                        &fd_variable_key,
+                        &mut fd_statements,
+                        &mut fd_conds,
+                    )?,
+                    ModelType::Bool => handle_bool_type(
+                        &fd_model_field,
+                        &fd_variable,
+                        fd_ty,
+                        &fd_variable_key,
+                        &mut fd_statements,
+                        &mut fd_conds,
+                    )?,
+                    ModelType::Optional(inner_type) => handle_optional_type(
+                        inner_type,
+                        &fd_model_field,
+                        &fd_variable,
+                        fd_ty,
+                        &fd_variable_key,
+                        &mut fd_statements,
+                        &mut fd_conds,
+                    )?,
+                    ModelType::Array => handle_array_type(
+                        &fd_model_field,
+                        &fd_variable,
+                        fd_ty,
+                        &fd_variable_key,
+                        &mut fd_statements,
+                        &mut fd_conds,
+                    )?,
+                    ModelType::Other => handle_other_type(
+                        &fd_model_field,
+                        &fd_variable,
+                        fd_ty,
+                        &fd_variable_key,
+                        &mut fd_statements,
+                        &mut fd_conds,
+                    )?,
+                }
+
+                let name = ident.to_string();
+                let data_type = data.struct_token;
+                let def_name = format!("#/definitions/{}", ident);
+                fd_conds.push(quote! {
+                    "title".to_string(), dade::JsonValue::String(dade::ToTitle::to_title(#name))
+                });
+                Ok(quote! {
+                    #(#attrs)* #vis #data_type #ident (
+                        #fd_attrs #fd_vis #fd_ty
+                    );
+                    impl dade::ToJsonValue for #ident {
+                        fn to_json_value(&self) -> dade::JsonValue {
+                            dade::ToJsonValue::to_json_value(&self.0)
+                        }
+                    }
+                    impl dade::FromJsonValue for #ident {
+                        fn from_json_value(value: &dade::JsonValue) -> dade::Result<Self> {
+                            let dict = [value];
+                            #(#fd_statements)*
+                            Ok(#ident ( #fd_variable ))
+                        }
+                    }
+                    impl dade::RegisterSchema for #ident {
+                        fn register_schema(defs: &mut std::collections::BTreeMap<String, dade::JsonValue>) -> dade::JsonValue {
+                            if !defs.contains_key(&#name.to_string()) {
+                                // Insert temporarily value.
+                                defs.insert(#name.to_string(), dade::JsonValue::Null);
+                                let mut json_value = <#fd_ty as dade::RegisterSchema>::register_schema(defs);
+                                if let dade::JsonValue::Object(ref mut dict) = json_value {
+                                    #(dict.insert(#fd_conds));*;
+                                }
+                                // Swap to proper value.
+                                defs.insert(#name.to_string(), json_value);
+                            }
+                            dade::JsonValue::Object(
+                                std::collections::BTreeMap::from([
+                                    (
+                                        "$ref".to_string(),
+                                        dade::JsonValue::String(#def_name.to_string())
+                                    ),
+                                ])
+                            )
+                        }
+                    }
+                })
+            } else {
+                let mut fields = Vec::new();
+                let mut keys = Vec::new();
+                let mut statements = Vec::new();
+                let mut properties = Vec::new();
+
+                for (idx, fd) in fields_unnamed.unnamed.iter().enumerate() {
+                    let (fd_attrs, fd_model_field) = parse_attrs(&fd.attrs);
+                    if fd_model_field.alias.is_some() {
+                        return Err(syn::Error::new(
+                            fd.span(),
+                            "No support alias term on the unnamed field.",
+                        ));
+                    };
+                    let fd_ty = &fd.ty;
+                    let fd_vis = &fd.vis;
+                    let mut fd_conds = Vec::new();
+                    let fd_variable = format_ident!("val{}", idx);
+                    let fd_variable_key = quote! { #idx };
+                    let fd_model_type = ModelType::new(fd_ty)?;
+
+                    match &fd_model_type {
+                        ModelType::Null => handle_null_type(
+                            &fd_model_field,
+                            &fd_variable,
+                            fd_ty,
+                            &fd_variable_key,
+                            &mut statements,
+                            &mut fd_conds,
+                        )?,
+                        ModelType::Number => handle_number_type(
+                            &fd_model_field,
+                            &fd_variable,
+                            fd_ty,
+                            &fd_variable_key,
+                            &mut statements,
+                            &mut fd_conds,
+                        )?,
+                        ModelType::String => handle_string_type(
+                            &fd_model_field,
+                            &fd_variable,
+                            fd_ty,
+                            &fd_variable_key,
+                            &mut statements,
+                            &mut fd_conds,
+                        )?,
+                        ModelType::Bool => handle_bool_type(
+                            &fd_model_field,
+                            &fd_variable,
+                            fd_ty,
+                            &fd_variable_key,
+                            &mut statements,
+                            &mut fd_conds,
+                        )?,
+                        ModelType::Optional(inner_type) => handle_optional_type(
+                            inner_type,
+                            &fd_model_field,
+                            &fd_variable,
+                            fd_ty,
+                            &fd_variable_key,
+                            &mut statements,
+                            &mut fd_conds,
+                        )?,
+                        ModelType::Array => handle_array_type(
+                            &fd_model_field,
+                            &fd_variable,
+                            fd_ty,
+                            &fd_variable_key,
+                            &mut statements,
+                            &mut fd_conds,
+                        )?,
+                        ModelType::Other => handle_other_type(
+                            &fd_model_field,
+                            &fd_variable,
+                            fd_ty,
+                            &fd_variable_key,
+                            &mut statements,
+                            &mut fd_conds,
+                        )?,
+                    }
+
+                    fields.push(quote! { #fd_attrs #fd_vis #fd_ty });
+                    keys.push(fd_variable);
+                    properties.push(quote! {
+                        {
+                            let mut s = <#fd_ty as dade::RegisterSchema>::register_schema(defs);
+                            if let dade::JsonValue::Object(ref mut dict) = s {
+                                #(dict.insert(#fd_conds));*;
+                            }
+                            s
+                        }
+                    });
+                }
+
+                let name = ident.to_string();
+                let data_type = data.struct_token;
+                let def_name = format!("#/definitions/{}", ident);
+                Ok(quote! {
+                    #(#attrs)* #vis #data_type #ident ( #(#fields),* );
+                    impl dade::ToJsonValue for #ident {
+                        fn to_json_value(&self) -> dade::JsonValue {
+                            dade::JsonValue::Array(Vec::from([#(dade::ToJsonValue::to_json_value(#keys)),*]))
+                        }
+                    }
+                    impl dade::FromJsonValue for #ident {
+                        fn from_json_value(value: &dade::JsonValue) -> dade::Result<Self> {
+                            match value {
+                                dade::JsonValue::Array(dict) => {
+                                    #(#statements)*
+                                    Ok(#ident ( #(#keys),* ))
+                                }
+                                _ => Err(dade::Error::validate_err("expect `JsonValue::Array`")),
+                            }
+                        }
+                    }
+                    impl dade::RegisterSchema for #ident {
+                        fn register_schema(defs: &mut std::collections::BTreeMap<String, dade::JsonValue>) -> dade::JsonValue {
+                            if !defs.contains_key(&#name.to_string()) {
+                                // Insert temporarily value.
+                                defs.insert(#name.to_string(), dade::JsonValue::Null);
+                                // Swap to proper value.
+                                defs.insert(
+                                    #name.to_string(),
+                                    dade::JsonValue::Object(std::collections::BTreeMap::from([
+                                        ("title".to_string(), dade::JsonValue::String(#name.to_string())),
+                                        ("type".to_string(), dade::JsonValue::String("array".to_string())),
+                                        // TODO;
+                                        // ("items".to_string(), dade::JsonValue::Bool(false)),
+                                        ("prefixItems".to_string(), dade::JsonValue::Array(Vec::from([#(#properties),*]))),
+                                    ])),
+                                );
+                            }
+                            dade::JsonValue::Object(
+                                std::collections::BTreeMap::from([
+                                    (
+                                        "$ref".to_string(),
+                                        dade::JsonValue::String(#def_name.to_string())
+                                    ),
+                                ])
+                            )
+                        }
+                    }
+                })
+            }
+        }
+        Fields::Unit => {
+            let name = ident.to_string();
+            let data_type = data.struct_token;
+            let def_name = format!("#/definitions/{}", ident);
+            Ok(quote! {
+                #(#attrs)* #vis #data_type #ident { }
+                impl dade::ToJsonValue for #ident {
+                    fn to_json_value(&self) -> dade::JsonValue {
+                        dade::JsonValue::Object(std::collections::BTreeMap::new())
+                    }
+                }
+                impl dade::FromJsonValue for #ident {
+                    fn from_json_value(value: &dade::JsonValue) -> dade::Result<Self> {
+                        match value {
+                            dade::JsonValue::Object(dict) => Ok(#ident { }),
+                            _ => Err(dade::Error::validate_err("expect `JsonValue::Object`")),
+                        }
+                    }
+                }
+                impl dade::RegisterSchema for #ident {
+                    fn register_schema(defs: &mut std::collections::BTreeMap<String, dade::JsonValue>) -> dade::JsonValue {
+                        if !defs.contains_key(&#name.to_string()) {
+                            let json_value = dade::JsonValue::Object(
+                                    std::collections::BTreeMap::from([
+                                        ("title".to_string(), dade::JsonValue::String(dade::ToTitle::to_title(#name))),
+                                        ("type".to_string(), dade::JsonValue::String("object".to_string())),
+                                    ])
+                                );
+                            defs.insert(#name.to_string(), json_value);
+                        }
+                        dade::JsonValue::Object(
+                            std::collections::BTreeMap::from([
+                                (
+                                    "$ref".to_string(),
+                                    dade::JsonValue::String(#def_name.to_string())
+                                ),
+                            ])
+                        )
+                    }
+                }
+            })
+        }
     }
 }
 
 pub(crate) fn handle_enum(
     ident: Ident,
     vis: Visibility,
+    attrs: Vec<Attribute>,
     data: DataEnum,
 ) -> Result<TokenStream, syn::Error> {
     let mut fields = Vec::new();
@@ -1073,7 +1384,7 @@ pub(crate) fn handle_enum(
     let name = ident.to_string();
     let def_name = format!("#/definitions/{}", ident);
     Ok(quote! {
-        #vis #data_type #ident { #(#fields),* }
+        #(#attrs)* #vis #data_type #ident { #(#fields),* }
         impl dade::ToJsonValue for #ident {
             fn to_json_value(&self) -> dade::JsonValue {
                 match self { #(#to_jsons),* }
