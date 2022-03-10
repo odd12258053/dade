@@ -1,9 +1,9 @@
 use dade::model;
 #[model]
 enum TestModel {
-    Value(
-       #[field(max_length = 2)]
-        String
-    ),
+    Value {
+        #[field(max_length = 2)]
+        value: String
+    },
 }
 fn main() {}

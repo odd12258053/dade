@@ -2,7 +2,7 @@ use dade::model;
 #[model]
 enum TestModel {
     Value{
-       #[field(alias = "val")]
+        #[field(alias = 1)]
         value: bool
     },
 }

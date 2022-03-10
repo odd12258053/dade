@@ -27,21 +27,59 @@ macro_rules! pass_pattern {
 }
 
 fail_pattern!(
-    (bool, f32, f64, i128, i16, i32, i64, i8, isize, string, u128, u16, u32, u64, u8, unit, usize,
-    vec), "./tests/models/struct", struct
+    (
+        bool, f32, f64, i128, i16, i32, i64, i8, isize, string, u128, u16, u32, u64, u8, unit,
+        usize, vec
+    ),
+    "./tests/models/struct",
+    struct
 );
 
 fail_pattern!(
-    (bool, f32, f64, i128, i16, i32, i64, i8, isize, string, u128, u16, u32, u64, u8, unit, usize,
-    vec), "./tests/models/enum/unnamed", enum_unnamed
+    (
+        bool, f32, f64, i128, i16, i32, i64, i8, isize, string, u128, u16, u32, u64, u8, unit,
+        usize, vec
+    ),
+    "./tests/models/enum/unnamed",
+    enum_unnamed
+);
+
+fail_pattern!(
+    (
+        bool, f32, f64, i128, i16, i32, i64, i8, isize, string, u128, u16, u32, u64, u8, unit,
+        usize, vec
+    ),
+    "./tests/models/enum/named",
+    enum_named
+);
+
+fail_pattern!(unit, "./tests/models/enum", enum_unit);
+
+pass_pattern!(
+    (
+        bool, f32, f64, i128, i16, i32, i64, i8, isize, string, u128, u16, u32, u64, u8, unit,
+        usize, vec
+    ),
+    "./tests/models/struct",
+    struct
 );
 
 pass_pattern!(
-    (bool, f32, f64, i128, i16, i32, i64, i8, isize, string, u128, u16, u32, u64, u8, unit, usize,
-    vec), "./tests/models/struct", struct
+    (
+        bool, f32, f64, i128, i16, i32, i64, i8, isize, string, u128, u16, u32, u64, u8, unit,
+        usize, vec
+    ),
+    "./tests/models/enum/unnamed",
+    enum_unnamed
 );
 
 pass_pattern!(
-    (bool, f32, f64, i128, i16, i32, i64, i8, isize, string, u128, u16, u32, u64, u8, unit, usize,
-    vec), "./tests/models/enum/unnamed", enum_unnamed
+    (
+        bool, f32, f64, i128, i16, i32, i64, i8, isize, string, u128, u16, u32, u64, u8, unit,
+        usize, vec
+    ),
+    "./tests/models/enum/named",
+    enum_named
 );
+
+pass_pattern!(unit, "./tests/models/enum", enum_unit);

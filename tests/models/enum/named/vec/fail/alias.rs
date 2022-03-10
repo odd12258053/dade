@@ -1,9 +1,9 @@
 use dade::model;
 #[model]
 enum TestModel {
-    Value(
-       #[field(alias = "val")]
-        Vec<()>
-    ),
+    Value {
+        #[field(alias = 1)]
+        value: Vec<()>
+    },
 }
 fn main() {}

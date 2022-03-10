@@ -2,13 +2,12 @@ use syn::parse::{Parse, ParseStream};
 use syn::punctuated::Punctuated;
 use syn::Token;
 
-use crate::terms::{AliasTerm, Condition, DefaultTerm, ExpectedTerm, Term, ValidateTerm};
+use crate::terms::{AliasTerm, Condition, DefaultTerm, Term, ValidateTerm};
 
 pub(crate) struct ModelField {
     pub(crate) default: Option<DefaultTerm>,
     pub(crate) validate: Option<ValidateTerm>,
     pub(crate) alias: Option<AliasTerm>,
-    pub(crate) expected: Option<ExpectedTerm>,
     pub(crate) conditions: Vec<Condition>,
 }
 
@@ -18,7 +17,6 @@ impl ModelField {
             default: None,
             validate: None,
             alias: None,
-            expected: None,
             conditions: Vec::new(),
         }
     }
@@ -29,7 +27,6 @@ impl Parse for ModelField {
         let mut default_term = None;
         let mut validate_term = None;
         let mut alias_term = None;
-        let mut expected_term = None;
         let mut conditions = Vec::new();
 
         let terms: Punctuated<Term, Token![,]> = Punctuated::parse_terminated(input)?;
@@ -62,7 +59,6 @@ impl Parse for ModelField {
                 Term::Alias(val) => alias_term = Some(val),
                 Term::Default(val) => default_term = Some(val),
                 Term::Validate(val) => validate_term = Some(val),
-                Term::Expected(val) => expected_term = Some(val),
             }
         }
         Ok(Self {
@@ -70,7 +66,6 @@ impl Parse for ModelField {
             default: default_term,
             validate: validate_term,
             alias: alias_term,
-            expected: expected_term,
         })
     }
 }

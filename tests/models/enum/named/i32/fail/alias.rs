@@ -1,9 +1,9 @@
 use dade::model;
 #[model]
 enum TestModel {
-    Value(
-       #[field(alias = "val")]
-        i32
-    ),
+    Value {
+        #[field(alias = 1)]
+        value: i32
+    },
 }
 fn main() {}

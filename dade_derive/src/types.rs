@@ -79,9 +79,7 @@ impl ModelType {
 }
 
 fn make_null_condition(model_field: &ModelField) -> Result<(), &str> {
-    if !model_field.conditions.is_empty() {
-        Err("Support condition is alias, default")
-    } else if model_field.validate.is_some() {
+    if !model_field.conditions.is_empty() || model_field.validate.is_some() {
         Err("Support condition is alias, default")
     } else {
         Ok(())
@@ -576,12 +574,6 @@ pub(crate) fn handle_struct(
 
             for field in fields_named.named.iter() {
                 let (attrs, model_field) = parse_attrs(&field.attrs);
-                if model_field.expected.is_some() {
-                    return Err(syn::Error::new(
-                        field.span(),
-                        "Support only the expected term on the unit field.",
-                    ));
-                }
                 let variable: &Ident = field.ident.as_ref().unwrap();
                 let variable_vis = &field.vis;
                 let variable_key = if let Some(alias) = &model_field.alias {
@@ -760,13 +752,6 @@ pub(crate) fn handle_enum(
 
         match variant.fields {
             Fields::Named(field) => {
-                if model_field.expected.is_some() {
-                    return Err(syn::Error::new(
-                        variant_ident.span(),
-                        "Support only the expected term on the unit field.",
-                    ));
-                }
-
                 let mut fds = Vec::new();
                 let mut maps = Vec::new();
                 let mut idents = Vec::new();
@@ -903,12 +888,6 @@ pub(crate) fn handle_enum(
                 });
             }
             Fields::Unnamed(field) => {
-                if model_field.expected.is_some() {
-                    return Err(syn::Error::new(
-                        field.span(),
-                        "No support expected term on the unnamed field.",
-                    ));
-                }
                 let mut fds = Vec::new();
                 let mut keys = Vec::new();
                 let mut properties = Vec::new();
@@ -921,12 +900,6 @@ pub(crate) fn handle_enum(
                             "No support alias term on the unnamed field.",
                         ));
                     };
-                    if fd_model_field.expected.is_some() {
-                        return Err(syn::Error::new(
-                            field.span(),
-                            "No support expected term on the unnamed field.",
-                        ));
-                    }
                     let fd_variable = format_ident!("val{}", idx);
                     let fd_variable_key = quote! { #idx };
                     let fd_ty = &fd.ty;
@@ -1062,9 +1035,19 @@ pub(crate) fn handle_enum(
                 }
             }
             Fields::Unit => {
+                if model_field.default.is_some()
+                    || model_field.validate.is_some()
+                    || !model_field.conditions.is_empty()
+                {
+                    return Err(syn::Error::new(
+                        variant_ident.span(),
+                        "Only support alias term on the unit field.",
+                    ));
+                };
+
                 fields.push(quote! { #attrs #variant_ident });
-                let cond = if let Some(expected) = model_field.expected {
-                    expected.value.value().to_string()
+                let cond = if let Some(alias) = model_field.alias {
+                    alias.value.value().to_string()
                 } else {
                     format!("{}", variant_ident)
                 };

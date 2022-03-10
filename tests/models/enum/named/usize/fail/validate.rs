@@ -1,9 +1,9 @@
 use dade::{model, Result};
 #[model]
 enum TestModel {
-    Value(
-       #[field(validate = validate_fn)]
-        usize
-    ),
+    Value {
+        #[field(validate = validate_fn)]
+        value: usize
+    },
 }
 fn main() {}

@@ -4,9 +4,9 @@ fn validate_fn(value: u64) -> Result<u64> {
 }
 #[model]
 enum TestModel {
-    Value(
-       #[field(validate = validate_fn)]
-        u64
-    ),
+    Value {
+        #[field(validate = validate_fn)]
+        value: u64
+    },
 }
 fn main() {}

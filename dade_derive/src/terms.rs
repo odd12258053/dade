@@ -336,10 +336,6 @@ pub(crate) struct ValidateTerm {
     pub value: Ident,
 }
 
-pub(crate) struct ExpectedTerm {
-    pub value: LitStr,
-}
-
 pub(crate) enum Term {
     MinLength(MinLengthTerm),
     MaxLength(MaxLengthTerm),
@@ -352,7 +348,6 @@ pub(crate) enum Term {
     Alias(AliasTerm),
     Default(DefaultTerm),
     Validate(ValidateTerm),
-    Expected(ExpectedTerm),
 }
 
 impl Parse for Term {
@@ -407,10 +402,6 @@ impl Parse for Term {
             Ok(Term::Default(term))
         } else if ident == "validate" {
             Ok(Term::Validate(ValidateTerm {
-                value: input.parse()?,
-            }))
-        } else if ident == "expected" {
-            Ok(Term::Expected(ExpectedTerm {
                 value: input.parse()?,
             }))
         } else {

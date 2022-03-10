@@ -1,9 +1,9 @@
 use dade::model;
 #[model]
 enum TestModel {
-    Value(
-       #[field(max_items = 2)]
-        usize
-    ),
+    Value {
+        #[field(max_items = 2)]
+        value: usize
+    },
 }
 fn main() {}
