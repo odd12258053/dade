@@ -601,3 +601,74 @@ fn test_self_reference_model() {
     assert!(TestModel::parse("{}").is_err());
     assert!(TestModel::parse("{\"self\":{\"v1\": 2}}").is_err());
 }
+
+#[test]
+fn test_enum_model() {
+    #[model]
+    enum Pattern {
+        Value1,
+        Value2,
+    }
+    fn validate_fn(value: Pattern) -> Result<Pattern> {
+        Ok(match value {
+            Pattern::Value1 => Pattern::Value2,
+            Pattern::Value2 => Pattern::Value1,
+        })
+    }
+    #[model]
+    struct TestModel {
+        v1: Pattern,
+        #[field(alias = "c2", validate = validate_fn)]
+        v2: Pattern,
+    }
+    assert_eq!(
+        TestModel::schema(),
+        "{\
+            \"$ref\":\"#/definitions/TestModel\",\
+            \"definitions\":{\
+                \"Pattern\":{\
+                    \"anyOf\":[{\
+                        \"const\":\"Value1\",\
+                        \"title\":\"Value1\"\
+                    },{\
+                        \"const\":\"Value2\",\
+                        \"title\":\"Value2\"\
+                    }],\
+                    \"title\":\"Pattern\"\
+                },\
+                \"TestModel\":{\
+                    \"properties\":{\
+                        \"c2\":{\
+                            \"$ref\":\"#/definitions/Pattern\",\
+                            \"title\":\"C2\"\
+                        },\
+                        \"v1\":{\
+                            \"$ref\":\"#/definitions/Pattern\",\
+                            \"title\":\"V1\"\
+                        }\
+                    },\
+                    \"required\":[\"v1\",\"c2\"],\
+                    \"title\":\"TestModel\",\
+                    \"type\":\"object\"\
+                }\
+            }\
+        }"
+    );
+    success_parse_model!(
+        TestModel,
+        "{\"c2\": \"Value1\",\"v1\": \"Value1\"}",
+        "{\"c2\":\"Value2\",\"v1\":\"Value1\"}"
+    );
+    success_parse_model!(
+        TestModel,
+        "{\"c2\": \"Value1\",\"v1\": \"Value2\"}",
+        "{\"c2\":\"Value2\",\"v1\":\"Value2\"}"
+    );
+    success_parse_model!(
+        TestModel,
+        "{\"c2\": \"Value2\",\"v1\": \"Value1\"}",
+        "{\"c2\":\"Value1\",\"v1\":\"Value1\"}"
+    );
+    assert!(TestModel::parse("{\"c2\": \"Value2\",\"v1\": \"Value3\"}").is_err());
+    assert!(TestModel::parse("{\"c2\": \"Value3\",\"v1\": \"Value1\"}").is_err());
+}

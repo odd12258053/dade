@@ -1191,7 +1191,7 @@ pub(crate) fn handle_enum(
                         }
                     }
                 });
-                let title = format!("{}::{}", ident, variant_ident);
+                let title = variant_ident.to_string();
                 schemas.push(quote! {
                     dade::JsonValue::Object(std::collections::BTreeMap::from([
                         ("title".to_string(), dade::JsonValue::String(#title.to_string())),
@@ -1309,7 +1309,7 @@ pub(crate) fn handle_enum(
                             }
                         }
                     });
-                    let title = format!("{}::{}", ident, variant_ident);
+                    let title = variant_ident.to_string();
                     schemas.push(quote! {
                         {
                             let mut s = #(#properties)*;
@@ -1336,7 +1336,7 @@ pub(crate) fn handle_enum(
                             }
                         }
                     });
-                    let title = format!("{}::{}", ident, variant_ident);
+                    let title = variant_ident.to_string();
                     schemas.push(quote! {
                         dade::JsonValue::Object(std::collections::BTreeMap::from([
                             ("title".to_string(), dade::JsonValue::String(#title.to_string())),
@@ -1373,7 +1373,7 @@ pub(crate) fn handle_enum(
                         if val == #cond { return Ok(#ident::#variant_ident); }
                     }
                 });
-                let title = format!("{}::{}", ident, variant_ident);
+                let title = variant_ident.to_string();
                 schemas.push(quote! {
                     dade::JsonValue::Object(std::collections::BTreeMap::from([
                         ("title".to_string(), dade::JsonValue::String(#title.to_string())),
