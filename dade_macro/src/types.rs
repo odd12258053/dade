@@ -99,7 +99,7 @@ fn handle_null_type(
         Some(DefaultTerm::Ident(term)) => {
             if &term.value == "null" {
                 conds.push(quote! { "default".to_string(), dade::JsonValue::Null });
-                quote! { () }
+                quote! { Ok(()) }
             } else {
                 return Err(syn::Error::new(
                     variable.span(),
@@ -107,7 +107,10 @@ fn handle_null_type(
                 ));
             }
         }
-        None => quote! { () },
+        None => {
+            let msg = format!("not found key, {}", variable_key);
+            quote! { Err(dade::Error::validate_err(#msg)) }
+        }
         Some(DefaultTerm::Lit(_)) => {
             return Err(syn::Error::new(
                 variable.span(),
@@ -117,9 +120,9 @@ fn handle_null_type(
     };
     statements.push(quote! {
         let #variable: #variable_type = match dict.get(#variable_key) {
-            Some(val) => dade::FromJsonValue::from_json_value(val)?,
+            Some(val) => dade::FromJsonValue::from_json_value(val),
             None => #default_val,
-        };
+        }?;
     });
     Ok(())
 }

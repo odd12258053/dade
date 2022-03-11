@@ -1,6 +1,6 @@
 [package]
-name = "dade_derive"
-version = "0.1.4"
+name = "dade_macro"
+version = "0.2.0"
 edition = "2021"
 authors = ["odd <odd12258053@gmail.com>"]
 description = "dade is data definition for Rust structures."
@@ -11,9 +11,8 @@ keywords = ["dade", "data", "serialization"]
 categories = ["data-structures", "encoding"]
 
 [lib]
-name = "dade_derive"
+name = "dade_macro"
 proc-macro = true
-
 
 [dependencies]
 proc-macro2 = "1.0.36"

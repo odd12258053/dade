@@ -1,6 +1,6 @@
 [package]
 name = "dade"
-version = "0.1.4"
+version = "0.2.0"
 edition = "2021"
 authors = ["odd <odd12258053@gmail.com>"]
 description = "dade is data definition for Rust structures."
@@ -11,11 +11,11 @@ keywords = ["dade", "data", "serialization"]
 categories = ["data-structures", "encoding"]
 
 [dependencies]
-dade_derive = { version="0.1.4", path = "./dade_derive" }
+dade_macro = { version="0.2.0", path = "./dade_macro" }
 
 [workspace]
 members = [
-    "dade_derive",
+    "dade_macro",
 ]
 
 [dev-dependencies]
