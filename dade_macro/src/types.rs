@@ -821,13 +821,14 @@ pub(crate) fn handle_struct(
                 fd_conds.push(quote! {
                     "title".to_string(), dade::JsonValue::String(dade::ToTitle::to_title(#name))
                 });
+                let indices = syn::Index::from(0);
                 Ok(quote! {
                     #(#attrs)* #vis #data_type #ident (
                         #fd_attrs #fd_vis #fd_ty
                     );
                     impl dade::ToJsonValue for #ident {
                         fn to_json_value(&self) -> dade::JsonValue {
-                            dade::ToJsonValue::to_json_value(&self.0)
+                            dade::ToJsonValue::to_json_value(&self.#indices)
                         }
                     }
                     impl dade::FromJsonValue for #ident {
@@ -865,6 +866,7 @@ pub(crate) fn handle_struct(
                 let mut keys = Vec::new();
                 let mut statements = Vec::new();
                 let mut properties = Vec::new();
+                let mut indices = Vec::new();
 
                 for (idx, fd) in fields_unnamed.unnamed.iter().enumerate() {
                     let (fd_attrs, fd_model_field) = parse_attrs(&fd.attrs);
@@ -943,6 +945,7 @@ pub(crate) fn handle_struct(
 
                     fields.push(quote! { #fd_attrs #fd_vis #fd_ty });
                     keys.push(fd_variable);
+                    indices.push(syn::Index::from(idx));
                     properties.push(quote! {
                         {
                             let mut s = <#fd_ty as dade::RegisterSchema>::register_schema(defs);
@@ -961,7 +964,7 @@ pub(crate) fn handle_struct(
                     #(#attrs)* #vis #data_type #ident ( #(#fields),* );
                     impl dade::ToJsonValue for #ident {
                         fn to_json_value(&self) -> dade::JsonValue {
-                            dade::JsonValue::Array(Vec::from([#(dade::ToJsonValue::to_json_value(#keys)),*]))
+                            dade::JsonValue::Array(Vec::from([#(dade::ToJsonValue::to_json_value(&self.#indices)),*]))
                         }
                     }
                     impl dade::FromJsonValue for #ident {
@@ -981,6 +984,7 @@ pub(crate) fn handle_struct(
                                 // Insert temporarily value.
                                 defs.insert(#name.to_string(), dade::JsonValue::Null);
                                 // Swap to proper value.
+                                let prefix_items = dade::JsonValue::Array(Vec::from([#(#properties),*]));
                                 defs.insert(
                                     #name.to_string(),
                                     dade::JsonValue::Object(std::collections::BTreeMap::from([
@@ -988,7 +992,7 @@ pub(crate) fn handle_struct(
                                         ("type".to_string(), dade::JsonValue::String("array".to_string())),
                                         // TODO;
                                         // ("items".to_string(), dade::JsonValue::Bool(false)),
-                                        ("prefixItems".to_string(), dade::JsonValue::Array(Vec::from([#(#properties),*]))),
+                                        ("prefixItems".to_string(), prefix_items),
                                     ])),
                                 );
                             }
