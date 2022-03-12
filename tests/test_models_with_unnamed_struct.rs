@@ -6,8 +6,8 @@ macro_rules! success_parse_model {
     ($model: ident, $in_string:literal, $out_string:literal) => {
         let ret = $model::parse($in_string);
         assert!(ret.is_ok());
-        let empty = ret.unwrap();
-        assert_eq!(empty.json(false), $out_string);
+        let val = ret.unwrap();
+        assert_eq!(val.json(false), $out_string);
     };
 }
 
