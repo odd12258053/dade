@@ -19,6 +19,8 @@ For the easy handle of data, the following will support it.
 + [ ] implements for useful types. e.g. URL, email and etc.
 + [ ] publish a trait that for you implements any custom type with your validation. 
 
+See [documentation](https://odd12258053.github.io/dade/) for more details.
+
 ## Roadmap
 + ~~implements for basic idea.~~
 + ~~implements for (primitive) types, enum, and more.~~
