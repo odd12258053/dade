@@ -13,7 +13,9 @@ macro_rules! success_parse_model {
 #[test]
 fn test_literal_model() {
     #[model]
-    enum TestModel1 { Value1 }
+    enum TestModel1 {
+        Value1,
+    }
     assert_eq!(
         TestModel1::schema(),
         "{\
@@ -38,7 +40,7 @@ fn test_literal_model() {
     enum TestModel2 {
         Value1,
         #[field(alias = "val2")]
-        Value2
+        Value2,
     }
     assert_eq!(
         TestModel2::schema(),
@@ -71,7 +73,7 @@ fn test_literal_model() {
 fn test_named_field_model() {
     #[model]
     enum TestModel1 {
-        Value1 { v1: u64 }
+        Value1 { v1: u64 },
     }
     assert_eq!(
         TestModel1::schema(),
@@ -97,7 +99,12 @@ fn test_named_field_model() {
             }\
         }"
     );
-    success_parse_model!(TestModel1, TestModel1::Value1{..}, "{\"v1\": 1}", "{\"v1\":1}");
+    success_parse_model!(
+        TestModel1,
+        TestModel1::Value1 { .. },
+        "{\"v1\": 1}",
+        "{\"v1\":1}"
+    );
     assert!(TestModel1::parse("{\"v1\": -1}").is_err());
 
     #[model]
@@ -140,8 +147,18 @@ fn test_named_field_model() {
             }\
         }"
     );
-    success_parse_model!(TestModel2, TestModel2::Value1{..}, "{\"v1\": 1}", "{\"v1\":1}");
-    success_parse_model!(TestModel2, TestModel2::Value2{..}, "{\"v1\": -1}", "{\"v1\":-1}");
+    success_parse_model!(
+        TestModel2,
+        TestModel2::Value1 { .. },
+        "{\"v1\": 1}",
+        "{\"v1\":1}"
+    );
+    success_parse_model!(
+        TestModel2,
+        TestModel2::Value2 { .. },
+        "{\"v1\": -1}",
+        "{\"v1\":-1}"
+    );
 
     fn validate_fn(value: i64) -> Result<i64> {
         if value > 0 {
@@ -152,9 +169,17 @@ fn test_named_field_model() {
     }
     #[model]
     enum TestModel3 {
-        Value1 { v1: u64 },
-        Value2 { #[field(validate = validate_fn)] v1: i64 },
-        Value3 { v1: i64, v2: Option<u64> },
+        Value1 {
+            v1: u64,
+        },
+        Value2 {
+            #[field(validate = validate_fn)]
+            v1: i64,
+        },
+        Value3 {
+            v1: i64,
+            v2: Option<u64>,
+        },
     }
     assert_eq!(
         TestModel3::schema(),
@@ -209,15 +234,25 @@ fn test_named_field_model() {
             }\
         }"
     );
-    success_parse_model!(TestModel3, TestModel3::Value1{..}, "{\"v1\": 1}", "{\"v1\":1}");
-    success_parse_model!(TestModel3, TestModel3::Value3{..}, "{\"v1\": -1}", "{\"v1\":-1,\"v2\":null}");
+    success_parse_model!(
+        TestModel3,
+        TestModel3::Value1 { .. },
+        "{\"v1\": 1}",
+        "{\"v1\":1}"
+    );
+    success_parse_model!(
+        TestModel3,
+        TestModel3::Value3 { .. },
+        "{\"v1\": -1}",
+        "{\"v1\":-1,\"v2\":null}"
+    );
 }
 
 #[test]
 fn test_unnamed_field_model() {
     #[model]
     enum TestModel1 {
-        Value1(u64)
+        Value1(u64),
     }
     assert_eq!(
         TestModel1::schema(),
@@ -313,7 +348,7 @@ fn test_unnamed_field_model() {
 fn test_complex_model() {
     #[model]
     struct InnerModel {
-        id: u128
+        id: u128,
     }
     #[model]
     enum InnerPattern {
@@ -327,9 +362,11 @@ fn test_complex_model() {
         Value2,
         Value3(f32),
         Value4(InnerModel),
-        Value5{id: i128},
+        Value5 {
+            id: i128,
+        },
         Value6(InnerPattern),
-        Other(String)
+        Other(String),
     }
     assert_eq!(
         TestModel::schema(),
@@ -402,7 +439,12 @@ fn test_complex_model() {
     success_parse_model!(TestModel, TestModel::Value3(_), "1", "1");
     success_parse_model!(TestModel, TestModel::Value3(_), "1.7", "1.7");
     success_parse_model!(TestModel, TestModel::Value4(_), "{\"id\": 1}", "{\"id\":1}");
-    success_parse_model!(TestModel, TestModel::Value5{..}, "{\"id\": -1}", "{\"id\":-1}");
+    success_parse_model!(
+        TestModel,
+        TestModel::Value5 { .. },
+        "{\"id\": -1}",
+        "{\"id\":-1}"
+    );
     success_parse_model!(TestModel, TestModel::Value6(_), "\"P1\"", "\"P1\"");
     success_parse_model!(TestModel, TestModel::Value6(_), "\"P2\"", "\"P2\"");
     success_parse_model!(TestModel, TestModel::Other(_), "\"abc\"", "\"abc\"");
