@@ -142,10 +142,10 @@
 //! ```
 use std::collections::BTreeMap;
 
-pub use dade_derive::model;
+pub use dade_macro::model;
 
 mod error;
-pub use crate::error::{Error, Result};
+pub use crate::error::{Error, ErrorType, Result};
 
 mod json;
 pub use crate::json::{FromJsonValue, JsonValue, Number, ToJsonValue};

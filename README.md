@@ -2,28 +2,30 @@
 ![Test](https://github.com/odd12258053/dade/workflows/Test/badge.svg)
 [![Crates.io](https://img.shields.io/crates/v/dade.svg)](https://crates.io/crates/dade)
 
-dade is data definition for Rust structures.
+`dade` is a framework for defining data structure to Rust structures, like [pydantic](https://pydantic-docs.helpmanual.io) in Python.
 
 For the easy handle of data, the following will support it.
-+ [ ] ⚠ validation for (primitive) types.
++ [x] validation for (primitive) types.
    + [x] numeric types; u8, u16, u32, u64, u128, usize, i8, i16, i32, i64, i128, isize, f32, f64
    + [x] boolean
    + [x] String
    + [x] Optional
    + [x] Vec
    + [x] nested model
-   + [ ] enum
+   + [x] enum
 + [x] export a data schema conforms JsonSchema.
 + [x] load a model from JSON.
 + [x] dump a JSON-string from a model.
 + [ ] implements for useful types. e.g. URL, email and etc.
 + [ ] publish a trait that for you implements any custom type with your validation. 
 
-## Roadmap
-+ ~~0.1: implements for basic idea.~~
-+ 0.2: implements for (primitive) types, enum and more.
-+ 0.3: implements for useful types and a trait for custom type.
+See [documentation](https://odd12258053.github.io/dade/) for more details.
 
+## Roadmap
++ ~~implements for basic idea.~~
++ ~~implements for (primitive) types, enum, and more.~~
++ support configuration of a model, for example, set a given name to a title in JsonSchema, or exclusion another key.
++ implements for useful types and a trait for custom type.
 
 ## Example
 ### Basic

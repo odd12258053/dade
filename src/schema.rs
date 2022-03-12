@@ -39,7 +39,16 @@ impl<T: RegisterSchema> RegisterSchema for Vec<T> {
 
 impl<T: RegisterSchema> RegisterSchema for Option<T> {
     fn register_schema(defs: &mut BTreeMap<String, JsonValue>) -> JsonValue {
-        <T as RegisterSchema>::register_schema(defs)
+        JsonValue::Object(BTreeMap::from([(
+            "anyOf".to_string(),
+            JsonValue::Array(Vec::from([
+                JsonValue::Object(BTreeMap::from([(
+                    "type".to_string(),
+                    JsonValue::String("null".to_string()),
+                )])),
+                <T as RegisterSchema>::register_schema(defs),
+            ])),
+        )]))
     }
 }
 
