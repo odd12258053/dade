@@ -37,21 +37,13 @@ impl<'a> SliceBytes<'a> {
 impl<'a> Stream<u8> for SliceBytes<'a> {
     #[inline]
     fn peek(&mut self) -> Option<&u8> {
-        if self.finish() {
-            None
-        } else {
-            Some(&self.bytes[self.pos])
-        }
+        self.bytes.get(self.pos)
     }
 
     #[inline]
     fn next(&mut self) -> Option<&u8> {
-        if self.finish() {
-            None
-        } else {
-            self.pos += 1;
-            Some(&self.bytes[self.pos - 1])
-        }
+        self.pos += 1;
+        self.bytes.get(self.pos - 1)
     }
 
     #[inline]
@@ -59,9 +51,7 @@ impl<'a> Stream<u8> for SliceBytes<'a> {
     where
         F: Fn(&u8) -> bool,
     {
-        while !self.finish() && cond(&self.bytes[self.pos]) {
-            self.pos += 1;
-        }
+        while self.next_if(&cond) {}
     }
 
     #[inline]
@@ -69,26 +59,23 @@ impl<'a> Stream<u8> for SliceBytes<'a> {
     where
         F: Fn(&u8) -> bool,
     {
-        if !self.finish() && cond(&self.bytes[self.pos]) {
-            self.pos += 1;
-            true
-        } else {
-            false
+        if let Some(b) = self.bytes.get(self.pos) {
+            if cond(b) {
+                self.pos += 1;
+                return true;
+            }
         }
+        false
     }
 
     #[inline]
     fn expect(&mut self, it: &[u8]) -> bool {
-        if self.length < self.pos + it.len() {
-            return false;
+        if self.length < self.pos + it.len() || it != &self.bytes[self.pos..self.pos + it.len()] {
+            false
+        } else {
+            self.pos += it.len();
+            true
         }
-        for i in it {
-            if i != &self.bytes[self.pos] {
-                return false;
-            }
-            self.pos += 1;
-        }
-        true
     }
 
     #[inline]
@@ -98,7 +85,7 @@ impl<'a> Stream<u8> for SliceBytes<'a> {
 
     #[inline]
     fn finish(&self) -> bool {
-        self.length == self.pos
+        self.length <= self.pos
     }
 
     #[inline]
@@ -119,80 +106,5 @@ impl<'a> Stream<u8> for SliceBytes<'a> {
     #[inline]
     fn read(&mut self) -> &[u8] {
         &self.bytes[self.anchor_point..self.pos]
-    }
-}
-
-pub struct StrStream<'a> {
-    inner: SliceBytes<'a>,
-}
-
-impl<'a> StrStream<'a> {
-    pub fn new(str: &'a str) -> StrStream {
-        StrStream {
-            inner: SliceBytes::new(str.as_bytes()),
-        }
-    }
-}
-
-impl<'a> Stream<u8> for StrStream<'a> {
-    #[inline]
-    fn peek(&mut self) -> Option<&u8> {
-        self.inner.peek()
-    }
-
-    #[inline]
-    fn next(&mut self) -> Option<&u8> {
-        self.inner.next()
-    }
-
-    #[inline]
-    fn while_if<F>(&mut self, cond: F)
-    where
-        F: Fn(&u8) -> bool,
-    {
-        self.inner.while_if(cond)
-    }
-
-    #[inline]
-    fn next_if<F>(&mut self, cond: F) -> bool
-    where
-        F: Fn(&u8) -> bool,
-    {
-        self.inner.next_if(cond)
-    }
-
-    #[inline]
-    fn expect(&mut self, it: &[u8]) -> bool {
-        self.inner.expect(it)
-    }
-
-    #[inline]
-    fn position(&self) -> usize {
-        self.inner.position()
-    }
-
-    #[inline]
-    fn finish(&self) -> bool {
-        self.inner.finish()
-    }
-
-    #[inline]
-    fn skip(&mut self) {
-        self.inner.skip()
-    }
-
-    #[inline]
-    fn skip_by(&mut self, size: usize) {
-        self.inner.skip_by(size)
-    }
-
-    #[inline]
-    fn anchor(&mut self) {
-        self.inner.anchor()
-    }
-
-    #[inline]
-    fn read(&mut self) -> &[u8] {
-        self.inner.read()
     }
 }

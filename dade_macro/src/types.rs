@@ -521,7 +521,7 @@ fn handle_other_type(
     variable_type: &Type,
     variable_key: &TokenStream,
     statements: &mut Vec<TokenStream>,
-    _conds: &mut Vec<TokenStream>,
+    _conds: &mut [TokenStream],
 ) -> Result<(), syn::Error> {
     if model_field.default.is_some() {
         return Err(syn::Error::new(

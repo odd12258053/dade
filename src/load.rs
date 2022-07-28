@@ -3,7 +3,7 @@ use std::convert::From;
 
 use crate::error::{Error, Result};
 use crate::json::{JsonValue, Number};
-use crate::stream::{SliceBytes, StrStream, Stream};
+use crate::stream::{SliceBytes, Stream};
 
 static JSON_CTR: [bool; 256] = {
     const CT: bool = true;
@@ -29,163 +29,15 @@ static JSON_CTR: [bool; 256] = {
     ]
 };
 
-static NUMBERS: [bool; 256] = {
-    const NU: bool = true;
-    const __: bool = false;
-    [
-        //   1,  2,  3,  4,  5,  6,  7,  8,  9,  A,  B,  C,  D,  E,  F,
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 0
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 1
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 2
-        NU, NU, NU, NU, NU, NU, NU, NU, NU, NU, __, __, __, __, __, __, // 3
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 4
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 5
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 6
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 7
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 8
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 9
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // A
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // B
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // C
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // D
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // E
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // F
-    ]
-};
-
-static NULL_BYTES: [u8; 4] = [b'n', b'u', b'l', b'l'];
-static TRUE_BYTES: [u8; 4] = [b't', b'r', b'u', b'e'];
-static FALSE_BYTES: [u8; 5] = [b'f', b'a', b'l', b's', b'e'];
-
-static UTF8_WELL_FORMED_80BF: [bool; 256] = {
-    const UN: bool = true;
-    const __: bool = false;
-    [
-        //   1,  2,  3,  4,  5,  6,  7,  8,  9,  A,  B,  C,  D,  E,  F,
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 0
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 1
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 2
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 3
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 4
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 5
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 6
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 7
-        UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, // 8
-        UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, // 9
-        UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, // A
-        UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, // B
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // C
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // D
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // E
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // F
-    ]
-};
-
-static UTF8_WELL_FORMED_A0BF: [bool; 256] = {
-    const UN: bool = true;
-    const __: bool = false;
-    [
-        //   1,  2,  3,  4,  5,  6,  7,  8,  9,  A,  B,  C,  D,  E,  F,
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 0
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 1
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 2
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 3
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 4
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 5
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 6
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 7
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 8
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 9
-        UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, // A
-        UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, // B
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // C
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // D
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // E
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // F
-    ]
-};
-
-static UTF8_WELL_FORMED_809F: [bool; 256] = {
-    const UN: bool = true;
-    const __: bool = false;
-    [
-        //   1,  2,  3,  4,  5,  6,  7,  8,  9,  A,  B,  C,  D,  E,  F,
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 0
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 1
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 2
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 3
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 4
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 5
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 6
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 7
-        UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, // 8
-        UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, // 9
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // A
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // B
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // C
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // D
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // E
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // F
-    ]
-};
-
-static UTF8_WELL_FORMED_90BF: [bool; 256] = {
-    const UN: bool = true;
-    const __: bool = false;
-    [
-        //   1,  2,  3,  4,  5,  6,  7,  8,  9,  A,  B,  C,  D,  E,  F,
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 0
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 1
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 2
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 3
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 4
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 5
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 6
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 7
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 8
-        UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, // 9
-        UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, // A
-        UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, // B
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // C
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // D
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // E
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // F
-    ]
-};
-
-static UTF8_WELL_FORMED_808F: [bool; 256] = {
-    const UN: bool = true;
-    const __: bool = false;
-    [
-        //   1,  2,  3,  4,  5,  6,  7,  8,  9,  A,  B,  C,  D,  E,  F,
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 0
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 1
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 2
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 3
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 4
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 5
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 6
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 7
-        UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, UN, // 8
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 9
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // A
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // B
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // C
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // D
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // E
-        __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // F
-    ]
-};
-
 pub struct JsonLoader<T, S: Stream<T>> {
     bytes: S,
     buffer: Vec<T>,
 }
 
-impl<'a> From<&'a str> for JsonLoader<u8, StrStream<'a>> {
+impl<'a> From<&'a str> for JsonLoader<u8, SliceBytes<'a>> {
     fn from(json: &'a str) -> Self {
         Self {
-            bytes: StrStream::new(json),
+            bytes: SliceBytes::new(json.as_bytes()),
             buffer: Vec::new(),
         }
     }
@@ -215,6 +67,7 @@ impl<S: Stream<u8>> JsonLoader<u8, S> {
         self.bytes.while_if(|&b| JSON_CTR[b as usize]);
     }
 
+    #[inline]
     fn get_number(&mut self) -> Result<JsonValue> {
         // number = [ minus ] int [ frac ] [ exp ]
         // decimal-point = %x2E       ; .
@@ -231,35 +84,35 @@ impl<S: Stream<u8>> JsonLoader<u8, S> {
         self.bytes.next_if(|&b| b == 0x2d);
         // int = zero / ( digit1-9 *DIGIT )
         match self.bytes.next() {
-            // zero
-            Some(&0x30) => {}
             // digit1-9
-            Some((0x31..=0x39)) => {
+            Some(0x31..=0x39) => {
                 // *DIGIT
-                self.bytes.while_if(|&b| NUMBERS[b as usize]);
+                self.bytes.while_if(|b| (0x30..=0x39).contains(b));
             }
+            // zero
+            Some(0x30) => {}
             _ => return Err(Error::parse_err("extra data")),
         }
         // frac = decimal-point 1*DIGIT
         // decimal-point
         if self.bytes.next_if(|&b| b == 0x2e) {
             // 1 DIGIT
-            if !self.bytes.next_if(|&b| NUMBERS[b as usize]) {
+            if !self.bytes.next_if(|b| (0x30..=0x39).contains(b)) {
                 return Err(Error::parse_err("extra data"));
             }
             // *DIGIT
-            self.bytes.while_if(|&b| NUMBERS[b as usize]);
+            self.bytes.while_if(|b| (0x30..=0x39).contains(b));
         }
         // exp = e [ minus / plus ] 1*DIGIT
         if self.bytes.next_if(|&b| b == 0x65 || b == 0x45) {
             // [ minus / plus ]
             self.bytes.next_if(|&b| b == 0x2d || b == 0x2b);
             // 1 DIGIT
-            if !self.bytes.next_if(|&b| NUMBERS[b as usize]) {
+            if !self.bytes.next_if(|b| (0x30..=0x39).contains(b)) {
                 return Err(Error::parse_err("extra data"));
             }
             // *DIGIT
-            self.bytes.while_if(|&b| NUMBERS[b as usize]);
+            self.bytes.while_if(|b| (0x30..=0x39).contains(b))
         }
         unsafe {
             Ok(JsonValue::Number(Number::new(String::from_utf8_unchecked(
@@ -327,6 +180,7 @@ impl<S: Stream<u8>> JsonLoader<u8, S> {
     #[inline]
     fn handle_escaped_str(&mut self) -> Result<()> {
         match self.bytes.next() {
+            Some(0x75) => self.handle_escaped_unicode()?,
             Some(0x22) => self.buffer.push(0x22),
             Some(0x5c) => self.buffer.push(0x5c),
             Some(0x2f) => self.buffer.push(0x2f),
@@ -335,12 +189,12 @@ impl<S: Stream<u8>> JsonLoader<u8, S> {
             Some(0x6e) => self.buffer.push(0x0a),
             Some(0x72) => self.buffer.push(0x0d),
             Some(0x74) => self.buffer.push(0x09),
-            Some(0x75) => self.handle_escaped_unicode()?,
             _ => return Err(Error::parse_err("invalid control character")),
         }
         Ok(())
     }
 
+    #[inline]
     fn _get_string(&mut self) -> Result<String> {
         // string = quotation-mark *char quotation-mark
         //
@@ -365,8 +219,8 @@ impl<S: Stream<u8>> JsonLoader<u8, S> {
         self.buffer.clear();
 
         macro_rules! handle_unicode {
-            ($range: ident) => {
-                if !self.bytes.next_if(|&b| $range[b as usize]) {
+            ($range: expr) => {
+                if !self.bytes.next_if(|b| $range.contains(b)) {
                     return Err(Error::parse_err("invalid utf-8 character"));
                 }
             };
@@ -374,6 +228,15 @@ impl<S: Stream<u8>> JsonLoader<u8, S> {
 
         loop {
             match self.bytes.peek() {
+                // ref: https://www.unicode.org/versions/Unicode14.0.0/ch03.pdf
+                Some(0x20..=0x21 | 0x23..=0x5b | 0x5d..=0x7f) => {
+                    self.bytes.skip();
+                }
+                Some((0xe1..=0xec)) => {
+                    self.bytes.skip();
+                    handle_unicode!(0x80..=0xbf);
+                    handle_unicode!(0x80..=0xbf);
+                }
                 Some(0x22) => unsafe {
                     self.buffer.extend_from_slice(self.bytes.read());
                     self.bytes.skip();
@@ -387,51 +250,42 @@ impl<S: Stream<u8>> JsonLoader<u8, S> {
                     self.handle_escaped_str()?;
                     self.bytes.anchor();
                 }
-                // ref: https://www.unicode.org/versions/Unicode14.0.0/ch03.pdf
-                Some(0x20..=0x21 | 0x23..=0x5b | 0x5d..=0x7f) => {
-                    self.bytes.skip();
-                }
                 Some((0xc2..=0xdf)) => {
                     self.bytes.skip();
-                    handle_unicode!(UTF8_WELL_FORMED_80BF);
+                    handle_unicode!(0x80..=0xbf);
                 }
                 Some(0xe0) => {
                     self.bytes.skip();
-                    handle_unicode!(UTF8_WELL_FORMED_A0BF);
-                    handle_unicode!(UTF8_WELL_FORMED_80BF);
-                }
-                Some((0xe1..=0xec)) => {
-                    self.bytes.skip();
-                    handle_unicode!(UTF8_WELL_FORMED_80BF);
-                    handle_unicode!(UTF8_WELL_FORMED_80BF);
+                    handle_unicode!(0xa0..=0xbf);
+                    handle_unicode!(0x80..=0xbf);
                 }
                 Some(0xed) => {
                     self.bytes.skip();
-                    handle_unicode!(UTF8_WELL_FORMED_809F);
-                    handle_unicode!(UTF8_WELL_FORMED_80BF);
+                    handle_unicode!(0x80..=0x9f);
+                    handle_unicode!(0x80..=0xbf);
                 }
                 Some((0xee..=0xef)) => {
                     self.bytes.skip();
-                    handle_unicode!(UTF8_WELL_FORMED_80BF);
-                    handle_unicode!(UTF8_WELL_FORMED_80BF);
+                    handle_unicode!(0x80..=0xbf);
+                    handle_unicode!(0x80..=0xbf);
                 }
                 Some(0xf0) => {
                     self.bytes.skip();
-                    handle_unicode!(UTF8_WELL_FORMED_90BF);
-                    handle_unicode!(UTF8_WELL_FORMED_80BF);
-                    handle_unicode!(UTF8_WELL_FORMED_80BF);
+                    handle_unicode!(0x90..=0xbf);
+                    handle_unicode!(0x80..=0xbf);
+                    handle_unicode!(0x80..=0xbf);
                 }
                 Some((0xf1..=0xf3)) => {
                     self.bytes.skip();
-                    handle_unicode!(UTF8_WELL_FORMED_80BF);
-                    handle_unicode!(UTF8_WELL_FORMED_80BF);
-                    handle_unicode!(UTF8_WELL_FORMED_80BF);
+                    handle_unicode!(0x80..=0xbf);
+                    handle_unicode!(0x80..=0xbf);
+                    handle_unicode!(0x80..=0xbf);
                 }
                 Some(0xf4) => {
                     self.bytes.skip();
-                    handle_unicode!(UTF8_WELL_FORMED_808F);
-                    handle_unicode!(UTF8_WELL_FORMED_80BF);
-                    handle_unicode!(UTF8_WELL_FORMED_80BF);
+                    handle_unicode!(0x80..=0x8f);
+                    handle_unicode!(0x80..=0xbf);
+                    handle_unicode!(0x80..=0xbf);
                 }
                 None => return Err(Error::parse_err("unterminated string")),
                 _ => return Err(Error::parse_err("invalid control character")),
@@ -439,34 +293,39 @@ impl<S: Stream<u8>> JsonLoader<u8, S> {
         }
     }
 
+    #[inline]
     fn get_string(&mut self) -> Result<JsonValue> {
         Ok(JsonValue::String(self._get_string()?))
     }
 
+    #[inline]
     fn get_null(&mut self) -> Result<JsonValue> {
-        if self.bytes.expect(&NULL_BYTES) {
+        if self.bytes.expect(b"null") {
             Ok(JsonValue::Null)
         } else {
             Err(Error::parse_err("extra data"))
         }
     }
 
+    #[inline]
     fn get_true(&mut self) -> Result<JsonValue> {
-        if self.bytes.expect(&TRUE_BYTES) {
+        if self.bytes.expect(b"true") {
             Ok(JsonValue::Bool(true))
         } else {
             Err(Error::parse_err("extra data"))
         }
     }
 
+    #[inline]
     fn get_false(&mut self) -> Result<JsonValue> {
-        if self.bytes.expect(&FALSE_BYTES) {
+        if self.bytes.expect(b"false") {
             Ok(JsonValue::Bool(false))
         } else {
             Err(Error::parse_err("extra data"))
         }
     }
 
+    #[inline]
     fn get_array(&mut self) -> Result<JsonValue> {
         self.skip_control_char();
         if self.bytes.next_if(|&b| b == 0x5d) {
@@ -484,62 +343,62 @@ impl<S: Stream<u8>> JsonLoader<u8, S> {
         }
     }
 
+    #[inline]
     fn get_object(&mut self) -> Result<JsonValue> {
         self.skip_control_char();
-        let mut dict = BTreeMap::new();
         if self.bytes.next_if(|&b| b == 0x7d) {
-            return Ok(JsonValue::Object(dict));
+            return Ok(JsonValue::Object(BTreeMap::new()));
         }
-        loop {
+        let mut dict = BTreeMap::new();
+
+        self.skip_control_char();
+        while Some(&0x22) == self.bytes.next() {
+            let key = self._get_string()?;
             self.skip_control_char();
-            if self.bytes.next_if(|&b| b == 0x22) {
-                let key = self._get_string()?;
-                self.skip_control_char();
-                if !self.bytes.next_if(|&b| b == 0x3a) {
-                    return Err(Error::parse_err("extra data"));
-                }
-                if dict.insert(key, self._load()?).is_some() {
-                    return Err(Error::parse_err("exists same key"));
-                }
-                self.skip_control_char();
-                match self.bytes.next() {
-                    Some(0x2c) => {}
-                    Some(0x7d) => return Ok(JsonValue::Object(dict)),
-                    _ => return Err(Error::parse_err("extra data")),
-                }
-            } else {
-                return Err(Error::parse_err("expect string"));
+            if !self.bytes.next_if(|&b| b == 0x3a) {
+                return Err(Error::parse_err("extra data"));
             }
+            if dict.insert(key, self._load()?).is_some() {
+                return Err(Error::parse_err("exists same key"));
+            }
+            self.skip_control_char();
+            match self.bytes.next() {
+                Some(0x2c) => {}
+                Some(0x7d) => return Ok(JsonValue::Object(dict)),
+                _ => return Err(Error::parse_err("extra data")),
+            }
+            self.skip_control_char();
         }
+        Err(Error::parse_err("expect string"))
     }
 
     #[inline]
     fn _load(&mut self) -> Result<JsonValue> {
         self.skip_control_char();
         match self.bytes.peek() {
-            // null
-            Some(&0x6e) => self.get_null(),
-            // true
-            Some(&0x74) => self.get_true(),
-            // false
-            Some(&0x66) => self.get_false(),
             // string
-            Some(&0x22) => {
+            Some(0x22) => {
                 self.bytes.skip();
                 self.get_string()
             }
+            // number
+            Some(0x30..=0x39 | 0x2d) => self.get_number(),
             // array
-            Some(&0x5b) => {
+            Some(0x5b) => {
                 self.bytes.skip();
                 self.get_array()
             }
             // object
-            Some(&0x7b) => {
+            Some(0x7b) => {
                 self.bytes.skip();
                 self.get_object()
             }
-            // number
-            Some(0x30..=0x39 | 0x2d) => self.get_number(),
+            // false
+            Some(0x66) => self.get_false(),
+            // true
+            Some(0x74) => self.get_true(),
+            // null
+            Some(0x6e) => self.get_null(),
             _ => Err(Error::parse_err("expect value, found no data")),
         }
     }

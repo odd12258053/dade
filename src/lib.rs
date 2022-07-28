@@ -160,7 +160,7 @@ mod schema;
 pub use crate::schema::RegisterSchema;
 
 mod stream;
-pub use crate::stream::{SliceBytes, StrStream, Stream};
+pub use crate::stream::{SliceBytes, Stream};
 
 /// A trait for converting string to titlecased.
 pub trait ToTitle {
