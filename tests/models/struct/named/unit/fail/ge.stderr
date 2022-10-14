@@ -1,0 +1,5 @@
+error: Support condition is alias, default
+ --> tests/models/struct/named/unit/fail/ge.rs:5:5
+  |
+5 |     value: (),
+  |     ^^^^^

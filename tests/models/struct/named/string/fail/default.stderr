@@ -1,0 +1,5 @@
+error: Support default condition is only string
+ --> tests/models/struct/named/string/fail/default.rs:5:5
+  |
+5 |     value: String,
+  |     ^^^^^

@@ -1,0 +1,22 @@
+error[E0277]: can't compare `f64` with `{integer}`
+ --> tests/models/enum/unnamed/f64/fail/gt.rs:2:1
+  |
+2 | #[model]
+  | ^^^^^^^^ no implementation for `f64 < {integer}` and `f64 > {integer}`
+  |
+  = help: the trait `PartialOrd<{integer}>` is not implemented for `f64`
+  = help: the following other types implement trait `PartialOrd<Rhs>`:
+            f32
+            f64
+            i128
+            i16
+            i32
+            i64
+            i8
+            isize
+          and $N others
+  = note: this error originates in the attribute macro `model` (in Nightly builds, run with -Z macro-backtrace for more info)
+help: consider using a floating-point literal by writing it with `.0`
+  |
+5 |        #[field(gt = 2.0)]
+  |                      ++

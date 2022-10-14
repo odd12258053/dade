@@ -1,0 +1,5 @@
+error: Support condition is alias, default and validate
+ --> tests/models/enum/named/bool/fail/le.rs:6:9
+  |
+6 |         value: bool
+  |         ^^^^^

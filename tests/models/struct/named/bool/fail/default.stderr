@@ -1,0 +1,5 @@
+error: Support default condition is only boolean
+ --> tests/models/struct/named/bool/fail/default.rs:5:5
+  |
+5 |     value: bool,
+  |     ^^^^^

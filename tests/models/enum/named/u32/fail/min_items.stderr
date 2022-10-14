@@ -1,0 +1,5 @@
+error: Support condition is gt, ge, lt, le, alias, default and validate
+ --> tests/models/enum/named/u32/fail/min_items.rs:6:9
+  |
+6 |         value: u32
+  |         ^^^^^

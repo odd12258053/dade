@@ -1,0 +1,13 @@
+error[E0425]: cannot find value `validate_fn` in this scope
+ --> tests/models/enum/named/u8/fail/validate.rs:5:28
+  |
+5 |         #[field(validate = validate_fn)]
+  |                            ^^^^^^^^^^^ not found in this scope
+
+warning: unused import: `Result`
+ --> tests/models/enum/named/u8/fail/validate.rs:1:19
+  |
+1 | use dade::{model, Result};
+  |                   ^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default

@@ -1,0 +1,5 @@
+error: Support condition is gt, ge, lt, le, alias, default and validate
+ --> tests/models/enum/named/i64/fail/min_length.rs:6:9
+  |
+6 |         value: i64
+  |         ^^^^^

@@ -1,0 +1,5 @@
+error: Support condition is min_items, max_items, alias and validate
+ --> tests/models/enum/named/vec/fail/le.rs:6:9
+  |
+6 |         value: Vec<()>
+  |         ^^^^^

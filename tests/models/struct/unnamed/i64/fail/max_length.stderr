@@ -1,0 +1,7 @@
+error: Support condition is gt, ge, lt, le, alias, default and validate
+ --> tests/models/struct/unnamed/i64/fail/max_length.rs:2:1
+  |
+2 | #[model]
+  | ^^^^^^^^
+  |
+  = note: this error originates in the attribute macro `model` (in Nightly builds, run with -Z macro-backtrace for more info)

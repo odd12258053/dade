@@ -1,0 +1,7 @@
+error: Support condition is min_items, max_items, alias and validate
+ --> tests/models/enum/unnamed/vec/fail/max_length.rs:2:1
+  |
+2 | #[model]
+  | ^^^^^^^^
+  |
+  = note: this error originates in the attribute macro `model` (in Nightly builds, run with -Z macro-backtrace for more info)

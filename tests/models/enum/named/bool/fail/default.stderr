@@ -1,0 +1,5 @@
+error: Support default condition is only boolean
+ --> tests/models/enum/named/bool/fail/default.rs:6:9
+  |
+6 |         value: bool
+  |         ^^^^^

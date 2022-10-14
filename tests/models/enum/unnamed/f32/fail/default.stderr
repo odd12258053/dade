@@ -1,0 +1,8 @@
+error[E0308]: `?` operator has incompatible types
+ --> tests/models/enum/unnamed/f32/fail/default.rs:2:1
+  |
+2 | #[model]
+  | ^^^^^^^^ expected `f32`, found integer
+  |
+  = note: `?` operator cannot convert from `{integer}` to `f32`
+  = note: this error originates in the attribute macro `model` (in Nightly builds, run with -Z macro-backtrace for more info)
