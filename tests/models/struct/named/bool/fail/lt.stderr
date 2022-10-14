@@ -1,0 +1,5 @@
+error: Support condition is alias, default and validate
+ --> tests/models/struct/named/bool/fail/lt.rs:5:5
+  |
+5 |     value: bool,
+  |     ^^^^^

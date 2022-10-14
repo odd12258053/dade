@@ -1,0 +1,5 @@
+error: Support condition is min_length, max_length, alias, default and validate
+ --> tests/models/struct/named/string/fail/min_items.rs:5:5
+  |
+5 |     value: String,
+  |     ^^^^^

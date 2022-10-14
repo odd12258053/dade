@@ -1,0 +1,5 @@
+error: Support condition is gt, ge, lt, le, alias, default and validate
+ --> tests/models/struct/named/u128/fail/min_length.rs:5:5
+  |
+5 |     value: u128,
+  |     ^^^^^

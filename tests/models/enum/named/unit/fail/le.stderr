@@ -1,0 +1,5 @@
+error: Support condition is alias, default
+ --> tests/models/enum/named/unit/fail/le.rs:6:9
+  |
+6 |         value: ()
+  |         ^^^^^

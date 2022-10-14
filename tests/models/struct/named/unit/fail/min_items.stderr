@@ -1,0 +1,5 @@
+error: Support condition is alias, default
+ --> tests/models/struct/named/unit/fail/min_items.rs:5:5
+  |
+5 |     value: (),
+  |     ^^^^^

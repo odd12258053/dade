@@ -1,0 +1,18 @@
+error[E0277]: can't compare `u8` with `{float}`
+ --> tests/models/struct/unnamed/u8/fail/lt.rs:2:1
+  |
+2 | #[model]
+  | ^^^^^^^^ no implementation for `u8 < {float}` and `u8 > {float}`
+  |
+  = help: the trait `PartialOrd<{float}>` is not implemented for `u8`
+  = help: the following other types implement trait `PartialOrd<Rhs>`:
+            f32
+            f64
+            i128
+            i16
+            i32
+            i64
+            i8
+            isize
+          and $N others
+  = note: this error originates in the attribute macro `model` (in Nightly builds, run with -Z macro-backtrace for more info)

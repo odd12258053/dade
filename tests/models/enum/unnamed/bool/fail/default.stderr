@@ -1,0 +1,7 @@
+error: Support default condition is only boolean
+ --> tests/models/enum/unnamed/bool/fail/default.rs:2:1
+  |
+2 | #[model]
+  | ^^^^^^^^
+  |
+  = note: this error originates in the attribute macro `model` (in Nightly builds, run with -Z macro-backtrace for more info)

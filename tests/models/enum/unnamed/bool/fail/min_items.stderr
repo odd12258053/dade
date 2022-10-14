@@ -1,0 +1,7 @@
+error: Support condition is alias, default and validate
+ --> tests/models/enum/unnamed/bool/fail/min_items.rs:2:1
+  |
+2 | #[model]
+  | ^^^^^^^^
+  |
+  = note: this error originates in the attribute macro `model` (in Nightly builds, run with -Z macro-backtrace for more info)

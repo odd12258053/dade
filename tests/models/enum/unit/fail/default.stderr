@@ -1,0 +1,5 @@
+error: Only support alias term on the unit field.
+ --> tests/models/enum/unit/fail/default.rs:5:5
+  |
+5 |     Value
+  |     ^^^^^

@@ -1,0 +1,5 @@
+error: No support alias term on the unnamed field.
+ --> tests/models/struct/unnamed/u32/fail/alias.rs:4:4
+  |
+4 |    #[field(alias = "val")]
+  |    ^

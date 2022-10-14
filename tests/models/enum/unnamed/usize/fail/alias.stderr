@@ -1,0 +1,9 @@
+error: No support alias term on the unnamed field.
+ --> tests/models/enum/unnamed/usize/fail/alias.rs:4:10
+  |
+4 |       Value(
+  |  __________^
+5 | |        #[field(alias = "val")]
+6 | |         usize
+7 | |     ),
+  | |_____^

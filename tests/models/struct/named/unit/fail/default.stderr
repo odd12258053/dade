@@ -1,0 +1,5 @@
+error: Support default condition is only `null`
+ --> tests/models/struct/named/unit/fail/default.rs:5:5
+  |
+5 |     value: (),
+  |     ^^^^^

@@ -1,0 +1,5 @@
+error: Support default condition is only string
+ --> tests/models/enum/named/string/fail/default.rs:6:9
+  |
+6 |         value: String
+  |         ^^^^^

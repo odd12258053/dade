@@ -1,0 +1,8 @@
+error[E0308]: `?` operator has incompatible types
+ --> tests/models/enum/named/u32/fail/default.rs:2:1
+  |
+2 | #[model]
+  | ^^^^^^^^ expected `u32`, found floating-point number
+  |
+  = note: `?` operator cannot convert from `{float}` to `u32`
+  = note: this error originates in the attribute macro `model` (in Nightly builds, run with -Z macro-backtrace for more info)

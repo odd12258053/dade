@@ -1,0 +1,5 @@
+error: Support default condition is only `null`
+ --> tests/models/enum/named/unit/fail/default.rs:6:9
+  |
+6 |         value: ()
+  |         ^^^^^

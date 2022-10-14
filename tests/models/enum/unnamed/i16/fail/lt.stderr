@@ -1,0 +1,18 @@
+error[E0277]: can't compare `i16` with `{float}`
+ --> tests/models/enum/unnamed/i16/fail/lt.rs:2:1
+  |
+2 | #[model]
+  | ^^^^^^^^ no implementation for `i16 < {float}` and `i16 > {float}`
+  |
+  = help: the trait `PartialOrd<{float}>` is not implemented for `i16`
+  = help: the following other types implement trait `PartialOrd<Rhs>`:
+            f32
+            f64
+            i128
+            i16
+            i32
+            i64
+            i8
+            isize
+          and $N others
+  = note: this error originates in the attribute macro `model` (in Nightly builds, run with -Z macro-backtrace for more info)
